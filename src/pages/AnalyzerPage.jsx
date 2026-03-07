@@ -20,7 +20,10 @@ export default function AnalyzerPage() {
       const result = await parseShopeeXLSX(file)
       result.kpis = calcKPIs(result.products)
       setData(result)
-    } catch (e) { alert('解析エラー: ' + e.message) }
+    } catch (e) { 
+      console.error('AI Error:', e)
+      alert('解析エラー: ' + e.message + '\n\nAPIキー: ' + (API_KEY ? API_KEY.substring(0,20) + '...' : 'なし'))
+    }
     setLoading(false)
   }
 
@@ -43,20 +46,23 @@ ${top10.map((p,i) => `${i+1}. ${p.name} | 売上₱${p.sales.toLocaleString()} |
 ## 🎯 今週のアクションプラン`
 
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/anthropic/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': API_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
         },
-        body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1500, messages:[{ role:'user', content:prompt }] })
+        body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1500, messages:[{ role:'user', content:prompt }] })
       })
-      if (!res.ok) throw new Error('API Error: ' + res.status)
+      if (!res.ok) {
+        const errBody = await res.text()
+        throw new Error('API Error: ' + res.status + ' / ' + errBody)
+      }
       const json = await res.json()
       setAiText(json.content?.[0]?.text || '応答がありませんでした')
-    } catch (e) { setAiText('⚠️ エラー: ' + e.message) }
+    } catch (e) { 
+      console.error('AI Error:', e)
+      setAiText('⚠️ エラー: ' + e.message + ' / ' + (e.cause || ''))
+    }
     setAiLoading(false)
   }
 

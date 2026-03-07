@@ -6,6 +6,7 @@ import ActionLogPage from "../pages/ActionLogPage"
 import InventoryPage from "../pages/InventoryPage"
 import RequestsPage from "../pages/RequestsPage"
 import SettingsPage from "../pages/SettingsPage"
+import PlanPage from "../pages/PlanPage"
 
 export default function AppLayout({ user }) {
   const [page, setPage] = useState("analyzer")
@@ -16,7 +17,7 @@ export default function AppLayout({ user }) {
       <header style={{ background:"var(--surface)", borderBottom:"1px solid var(--rim)", padding:"0 1.5rem", display:"flex", alignItems:"center", gap:"1rem", height:56, position:"sticky", top:0, zIndex:100 }}>
         <div style={{ fontFamily:"Bebas Neue,sans-serif", fontSize:"1.4rem", letterSpacing:"0.08em", color:"var(--orange)" }}>SHOPPYWORKS</div>
         <nav style={{ display:"flex", gap:"0.25rem", marginLeft:"1rem" }}>
-          {[["actionlog","日次管理"],["analyzer","商品分析"],["inventory","在庫棚卸"],["requests","御用聞き"],["settings","⚙️ 設定"]].map(([id,label]) => (
+          {[["actionlog","日次管理"],["plan","行動計画"],["analyzer","商品分析"],["inventory","在庫棚卸"],["requests","御用聞き"],["settings","⚙️ 設定"]].map(([id,label]) => (
             <button key={id} onClick={() => setPage(id)} style={{ padding:"0.35rem 0.9rem", borderRadius:8, border:"none", cursor:"pointer", fontSize:"0.78rem", fontWeight:700, background:page===id?"rgba(255,107,43,0.15)":"transparent", color:page===id?"var(--orange)":"var(--dim2)", transition:"all 0.2s" }}>
               {label}
             </button>
@@ -33,6 +34,7 @@ export default function AppLayout({ user }) {
         {page === "inventory" && <div style={{maxWidth:960,margin:"0 auto",padding:"1.5rem"}}><h2 style={{fontFamily:"Bebas Neue,sans-serif",fontSize:"1.8rem",letterSpacing:"0.04em",marginBottom:"1.5rem"}}>在庫棚卸</h2><InventoryPage uid={user?.uid} /></div>}
         {page === "requests" && <div style={{maxWidth:960,margin:"0 auto",padding:"1.5rem"}}><h2 style={{fontFamily:"Bebas Neue,sans-serif",fontSize:"1.8rem",letterSpacing:"0.04em",marginBottom:"1.5rem"}}>御用聞き</h2><RequestsPage uid={user?.uid} /></div>}
         {page === "settings" && <SettingsPage />}
+        {page === "plan" && <PlanPage />}
       </main>
     </div>
   )

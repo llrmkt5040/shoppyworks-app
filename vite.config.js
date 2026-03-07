@@ -12,10 +12,11 @@ export default defineConfig(({ mode }) => {
           target: 'https://api.anthropic.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/anthropic/, ''),
-          headers: {
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-            'x-api-key': env.VITE_ANTHROPIC_API_KEY,
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              proxyReq.setHeader('x-api-key', env.VITE_ANTHROPIC_API_KEY)
+              proxyReq.setHeader('anthropic-version', '2023-06-01')
+            })
           }
         }
       }

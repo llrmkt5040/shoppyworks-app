@@ -1,0 +1,9 @@
+[build]
+  publish = "dist"
+
+[[redirects]]
+  from = "/api/anthropic/*"
+  to = "https://api.anthropic.com/:splat"
+  status = 200
+  force = true
+  headers = {X-Api-Key = "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", anthropic-version = "2023-06-01"}
