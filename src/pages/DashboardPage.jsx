@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { db, auth } from '../lib/firebase'
 import { collection, getDocs } from 'firebase/firestore'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts'
@@ -7,9 +7,41 @@ import PlanPage from './PlanPage'
 export default function DashboardPage() {
   const [histories, setHistories] = useState([])
   const [loading, setLoading] = useState(true)
+  const [diaryLogs, setDiaryLogs] = useState([])
+  const dropRef = useRef()
   const [tab, setTab] = useState('today')
 
   useEffect(() => { loadData() }, [])
+
+  async function handleFile(file) {
+    if (!file) return
+    try {
+      const { parseShopeeXLSX, calcKPIs } = await import('../lib/xlsx')
+      const result = await parseShopeeXLSX(file)
+      result.kpis = calcKPIs(result.products)
+      const { addDoc, collection: col, serverTimestamp } = await import('firebase/firestore')
+      const userId = auth.currentUser?.uid || 'anonymous'
+      const productsToSave = result.products.slice(0, 100).map(p => ({
+        name: p.name || '', sales: p.sales || 0, ctr: p.ctr || 0,
+        cvr: p.cvr || 0, bounce: p.bounce || 0,
+        impressions: p.impressions || 0, orders: p.orders || 0,
+        category: p.category || '', priorityScore: p.priorityScore || 0,
+      }))
+      await addDoc(col(db, 'xlsx_analyses'), {
+        userId, filename: result.filename || 'unknown.xlsx',
+        uploadedAt: serverTimestamp(),
+        productCount: result.products.length, savedCount: productsToSave.length,
+        kpis: {
+          totalSales: result.kpis.totalSales || 0, productCount: result.kpis.productCount || 0,
+          avgCtr: result.kpis.avgCtr || 0, avgCvr: result.kpis.avgCvr || 0,
+          avgBounce: result.kpis.avgBounce || 0, urgentCount: result.kpis.urgentCount || 0,
+        },
+        products: productsToSave,
+      })
+      alert('保存しました ' + productsToSave.length + '件 ShopeeAnalyzerで詳細確認できます')
+      await loadData()
+    } catch(e) { alert('エラー: ' + e.message) }
+  }
 
   async function loadData() {
     setLoading(true)
@@ -22,6 +54,16 @@ export default function DashboardPage() {
         .sort((a, b) => a.uploadedAt.seconds - b.uploadedAt.seconds)
       setHistories(list)
     } catch(e) { console.error(e) }
+    // ShopeeDiaryログも取得
+    try {
+      const snap2 = await getDocs(collection(db, 'action_logs'))
+      const logs = snap2.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(d => d.uid === (auth.currentUser?.uid || 'anonymous'))
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+        .slice(0, 30)
+      setDiaryLogs(logs)
+    } catch(e) { console.error('diary fetch error:', e) }
     setLoading(false)
   }
 
@@ -256,9 +298,25 @@ export default function DashboardPage() {
             {tab === 'today' && (
               <div className="fade-up">
                 <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>📅 {todayStr} のサマリー</div>
-                {!latest ? (
-                  <div style={{ textAlign:'center', padding:'3rem', color:'var(--dim2)', fontSize:'0.85rem' }}>データがありません。XLSXをアップロードしてください。</div>
-                ) : (
+
+                {/* XLSXアップロードエリア */}
+                <div
+                  ref={dropRef}
+                  onClick={() => document.getElementById('dash-xlsx-input').click()}
+                  onDragOver={e => { e.preventDefault(); dropRef.current.style.borderColor='var(--orange)' }}
+                  onDragLeave={() => dropRef.current.style.borderColor='rgba(255,107,43,0.3)'}
+                  onDrop={e => { e.preventDefault(); dropRef.current.style.borderColor='rgba(255,107,43,0.3)'; handleFile(e.dataTransfer.files[0]) }}
+                  style={{ border:'2px dashed rgba(255,107,43,0.3)', borderRadius:16, padding:'1.5rem', textAlign:'center', cursor:'pointer', background: todayUploaded ? 'rgba(22,163,74,0.04)' : 'rgba(255,107,43,0.02)', marginBottom:'1.25rem', transition:'all 0.3s' }}>
+                  <div style={{ fontSize:'1.8rem', marginBottom:'0.4rem' }}>{todayUploaded ? '✅' : '📊'}</div>
+                  <div style={{ fontWeight:900, fontSize:'0.85rem', marginBottom:'0.25rem' }}>{todayUploaded ? '今日アップ済み · 別ファイルをドロップで更新' : 'XLSXをドロップしてアップロード'}</div>
+                  <div style={{ fontSize:'0.68rem', color:'var(--dim2)' }}>
+                    <a href="https://seller.shopee.ph/datacenter/product/performance" target="_blank" style={{ color:'var(--orange)', textDecoration:'none' }}>seller.shopee.ph › Product Performance</a> · 過去30日を選択
+                  </div>
+                  <input id="dash-xlsx-input" type="file" accept=".xlsx,.xls" style={{ display:'none' }} onChange={e => handleFile(e.target.files[0])} />
+                </div>
+
+                {/* KPIカード */}
+                {latest && (
                   <KpiCards items={[
                     { l:'最新売上', v:'₱'+(latest.kpis?.totalSales||0).toLocaleString('en',{maximumFractionDigits:0}), a:'var(--orange)' },
                     { l:'商品数', v:(latest.kpis?.productCount||0)+'件', a:'var(--purple)' },
@@ -267,6 +325,24 @@ export default function DashboardPage() {
                     { l:'緊急改善', v:(latest.kpis?.urgentCount||0)+'件', a:(latest.kpis?.urgentCount||0)>0?'var(--red)':'var(--green)' },
                     { l:'最終アップ', v:formatLabel(latest.uploadedAt), a:'var(--ai)' },
                   ]} />
+                )}
+
+                {/* ShopeeDiary最新ログ */}
+                {diaryLogs.length > 0 && (
+                  <div className="card" style={{ padding:'1.1rem', marginTop:'0.5rem' }}>
+                    <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.75rem' }}>📅 ShopeeDiary 最新ログ</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:'0.4rem' }}>
+                      {diaryLogs.slice(0,5).map((l, i) => (
+                        <div key={i} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto auto', gap:'0.75rem', alignItems:'center', padding:'0.4rem 0', borderBottom: i<4?'1px solid var(--rim)':'none' }}>
+                          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.65rem', color:'var(--dim2)', whiteSpace:'nowrap' }}>{l.date}</span>
+                          <span style={{ fontSize:'0.72rem', color:'var(--dim2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.memo || '-'}</span>
+                          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.72rem', color:'var(--orange)', whiteSpace:'nowrap' }}>₱{Number(l.sales_php||0).toLocaleString()}</span>
+                          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.68rem', color:'var(--dim2)', whiteSpace:'nowrap' }}>出品:{l.listings||'-'}</span>
+                          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.68rem', color:'var(--dim2)', whiteSpace:'nowrap' }}>❤️{l.followers||'-'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )}

@@ -58,13 +58,7 @@ export default function AnalyzerPage({ onNavigate }) {
       if (list.length > 0) {
         setLatestHistory(list[0])
         setUrgentCount(list[0].kpis?.urgentCount || 0)
-        // 今日アップ済みなら自動で分析画面を復元
-        const todayStr = new Date().toISOString().slice(0, 10)
-        const latestDate = new Date(list[0].uploadedAt.seconds * 1000).toISOString().slice(0, 10)
-        if (latestDate === todayStr && list[0].products?.length) {
-          setData({ filename: list[0].filename, products: list[0].products, kpis: list[0].kpis })
-          setTab('products')
-        }
+
       }
     } catch(e) { console.error(e) }
     setHistLoading(false)
