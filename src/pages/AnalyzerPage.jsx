@@ -30,6 +30,7 @@ export default function AnalyzerPage({ onNavigate }) {
   const [toast, setToast] = useState({ msg:'', type:'success' })
   const [saving, setSaving] = useState(false)
   const [latestHistory, setLatestHistory] = useState(null)
+  const [histories, setHistories] = useState([])
   const [urgentCount, setUrgentCount] = useState(null)
   const [histLoading, setHistLoading] = useState(true)
 
@@ -55,6 +56,7 @@ export default function AnalyzerPage({ onNavigate }) {
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(d => d.userId === userId && d.uploadedAt?.seconds)
         .sort((a, b) => b.uploadedAt.seconds - a.uploadedAt.seconds)
+      setHistories(list)
       if (list.length > 0) {
         setLatestHistory(list[0])
         setUrgentCount(list[0].kpis?.urgentCount || 0)
@@ -62,6 +64,24 @@ export default function AnalyzerPage({ onNavigate }) {
       }
     } catch(e) { console.error(e) }
     setHistLoading(false)
+  }
+
+  function loadAndRestore(h) {
+    if (!h.products?.length) { showToast('商品データがありません', 'error'); return }
+    setData({ filename: h.filename, products: h.products, kpis: h.kpis })
+    setTab('products')
+    showToast('履歴を復元しました', 'success')
+  }
+
+  async function deleteHistory(id) {
+    if (!confirm('この履歴を削除しますか？')) return
+    try {
+      const { deleteDoc, doc: docRef } = await import('firebase/firestore')
+      await deleteDoc(docRef(db, 'xlsx_analyses', id))
+      setHistories(prev => prev.filter(h => h.id !== id))
+      if (latestHistory?.id === id) setLatestHistory(null)
+      showToast('削除しました', 'success')
+    } catch(e) { showToast('削除に失敗しました', 'error') }
   }
 
   function showToast(msg, type = 'success') {
@@ -357,6 +377,35 @@ export default function AnalyzerPage({ onNavigate }) {
           </div>
         )}
       </div>
+
+      {/* アップロード履歴 */}
+      {histories.length > 0 && (
+        <div className="card" style={{ padding:'1.1rem', marginTop:'1rem' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'0.75rem' }}>
+            <span style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700 }}>📂 アップロード履歴</span>
+            <span style={{ fontSize:'0.65rem', color:'var(--orange)', fontWeight:700 }}>{histories.length}件</span>
+            <button className="btn-ghost" style={{ marginLeft:'auto', fontSize:'0.65rem' }} onClick={loadLatestHistory}>🔄</button>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:'0.4rem' }}>
+            {histories.map((h, i) => (
+              <div key={h.id} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap:'0.75rem', alignItems:'center', padding:'0.5rem 0.6rem', background:'rgba(255,255,255,0.02)', borderRadius:8, border:'1px solid var(--rim)' }}>
+                <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.2rem', color:'var(--orange)', minWidth:'1.5rem', textAlign:'center', lineHeight:1 }}>{i+1}</div>
+                <div>
+                  <div style={{ fontSize:'0.75rem', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:'0.15rem' }}>{h.filename}</div>
+                  <div style={{ display:'flex', gap:'0.6rem', flexWrap:'wrap' }}>
+                    <span style={{ fontSize:'0.65rem', color:'var(--dim2)' }}>🕒 {formatDate(h.uploadedAt)}</span>
+                    <span style={{ fontSize:'0.65rem', color:'var(--orange)', fontWeight:700 }}>₱{(h.kpis?.totalSales||0).toLocaleString('en',{maximumFractionDigits:0})}</span>
+                    <span style={{ fontSize:'0.65rem', color:'var(--dim2)' }}>📦 {h.productCount}商品</span>
+                    <span style={{ fontSize:'0.65rem', color:(h.kpis?.urgentCount||0)>0?'var(--red)':'var(--dim2)' }}>🔴 緊急{h.kpis?.urgentCount||0}件</span>
+                  </div>
+                </div>
+                <button onClick={() => loadAndRestore(h)} style={{ padding:'0.28rem 0.6rem', borderRadius:8, border:'1px solid rgba(255,107,43,0.3)', background:'rgba(255,107,43,0.08)', color:'var(--orange)', fontSize:'0.68rem', cursor:'pointer', fontWeight:700, fontFamily:"'Zen Kaku Gothic New',sans-serif", whiteSpace:'nowrap' }}>復元</button>
+                <button onClick={() => deleteHistory(h.id)} style={{ padding:'0.28rem 0.5rem', borderRadius:8, border:'1px solid var(--rim)', background:'transparent', color:'var(--dim)', fontSize:'0.68rem', cursor:'pointer' }}>🗑️</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
