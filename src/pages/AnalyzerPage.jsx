@@ -4,6 +4,15 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { db, auth } from '../lib/firebase'
 import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore'
 
+const CHANGELOG = [
+  { date: "2026-03-11", text: "🎯 ShopeeAnalyzerをコクピットに強化・トップページ設定" },
+  { date: "2026-03-11", text: "📊 ダッシュボードを4タブ化（日次・週次・月次・ロードマップ）" },
+  { date: "2026-03-11", text: "🔍 商品詳細テーブルに枠固定・ソート・フィルタ・条件指定を追加" },
+  { date: "2026-03-11", text: "🔥 ダッシュボードに日次アップ管理・ストリーク・アラート追加" },
+  { date: "2026-03-10", text: "📂 分析履歴をFirestoreに保存・履歴ページ追加" },
+  { date: "2026-03-10", text: "🏠 週次ダッシュボード新規作成" }
+]
+
 function Toast({ msg, type }) {
   if (!msg) return null
   const bg = type === 'success' ? '#16a34a' : '#dc2626'
@@ -14,16 +23,17 @@ function Toast({ msg, type }) {
   )
 }
 
-export default function AnalyzerPage() {
+export default function AnalyzerPage({ onNavigate }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState('overview')
   const [toast, setToast] = useState({ msg:'', type:'success' })
   const [saving, setSaving] = useState(false)
-  const [histories, setHistories] = useState([])
-  const [histLoading, setHistLoading] = useState(false)
+  const [latestHistory, setLatestHistory] = useState(null)
+  const [urgentCount, setUrgentCount] = useState(null)
+  const [histLoading, setHistLoading] = useState(true)
 
-  // 商品詳細タブ用フィルタ・ソート・条件
+  // ソート・フィルタ
   const [sortKey, setSortKey] = useState('priorityScore')
   const [sortDir, setSortDir] = useState('desc')
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -33,15 +43,10 @@ export default function AnalyzerPage() {
   const dropRef = useRef()
 
   useEffect(() => {
-    if (tab === 'history' && histories.length === 0) loadHistories()
-  }, [tab])
+    loadLatestHistory()
+  }, [])
 
-  function showToast(msg, type = 'success') {
-    setToast({ msg, type })
-    setTimeout(() => setToast({ msg:'', type:'success' }), 3000)
-  }
-
-  async function loadHistories() {
+  async function loadLatestHistory() {
     setHistLoading(true)
     try {
       const userId = auth.currentUser?.uid || 'anonymous'
@@ -49,38 +54,25 @@ export default function AnalyzerPage() {
       const list = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(d => d.userId === userId && d.uploadedAt?.seconds)
-        .sort((a, b) => (a.uploadedAt.seconds) - (b.uploadedAt.seconds))
-      setHistories(list)
-    } catch(e) {
-      console.error(e)
-      showToast('履歴取得に失敗しました', 'error')
-    }
+        .sort((a, b) => b.uploadedAt.seconds - a.uploadedAt.seconds)
+      if (list.length > 0) {
+        setLatestHistory(list[0])
+        setUrgentCount(list[0].kpis?.urgentCount || 0)
+        // 今日アップ済みなら自動で分析画面を復元
+        const todayStr = new Date().toISOString().slice(0, 10)
+        const latestDate = new Date(list[0].uploadedAt.seconds * 1000).toISOString().slice(0, 10)
+        if (latestDate === todayStr && list[0].products?.length) {
+          setData({ filename: list[0].filename, products: list[0].products, kpis: list[0].kpis })
+          setTab('products')
+        }
+      }
+    } catch(e) { console.error(e) }
     setHistLoading(false)
   }
 
-  async function deleteHistory(id) {
-    if (!confirm('この履歴を削除しますか？')) return
-    try {
-      const { deleteDoc, doc } = await import('firebase/firestore')
-      await deleteDoc(doc(db, 'xlsx_analyses', id))
-      setHistories(prev => prev.filter(h => h.id !== id))
-      showToast('削除しました', 'success')
-    } catch(e) {
-      showToast('削除に失敗しました', 'error')
-    }
-  }
-
-  function formatDate(ts) {
-    if (!ts) return '-'
-    const d = ts.toDate ? ts.toDate() : new Date(ts)
-    return d.toLocaleDateString('ja-JP', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })
-  }
-
-  function loadAndRestore(h) {
-    if (!h.products?.length) { showToast('商品データがありません', 'error'); return }
-    setData({ filename: h.filename, products: h.products, kpis: h.kpis })
-    setTab('overview')
-    showToast('履歴を復元しました', 'success')
+  function showToast(msg, type = 'success') {
+    setToast({ msg, type })
+    setTimeout(() => setToast({ msg:'', type:'success' }), 3000)
   }
 
   async function saveToFirestore(result) {
@@ -89,30 +81,23 @@ export default function AnalyzerPage() {
       const userId = auth.currentUser?.uid || 'anonymous'
       const productsToSave = result.products.slice(0, 100).map(p => ({
         name: p.name || '', sales: p.sales || 0, ctr: p.ctr || 0,
-        cvr: p.cvr || 0, bounce: p.bounce || 0, impressions: p.impressions || 0,
-        orders: p.orders || 0,
+        cvr: p.cvr || 0, bounce: p.bounce || 0,
+        impressions: p.impressions || 0, orders: p.orders || 0,
         category: p.category || '', priorityScore: p.priorityScore || 0,
       }))
       await addDoc(collection(db, 'xlsx_analyses'), {
-        userId,
-        filename: result.filename || 'unknown.xlsx',
+        userId, filename: result.filename || 'unknown.xlsx',
         uploadedAt: serverTimestamp(),
-        productCount: result.products.length,
-        savedCount: productsToSave.length,
+        productCount: result.products.length, savedCount: productsToSave.length,
         kpis: {
-          totalSales: result.kpis.totalSales || 0,
-          productCount: result.kpis.productCount || 0,
-          avgCtr: result.kpis.avgCtr || 0,
-          avgCvr: result.kpis.avgCvr || 0,
-          avgBounce: result.kpis.avgBounce || 0,
-          urgentCount: result.kpis.urgentCount || 0,
+          totalSales: result.kpis.totalSales || 0, productCount: result.kpis.productCount || 0,
+          avgCtr: result.kpis.avgCtr || 0, avgCvr: result.kpis.avgCvr || 0,
+          avgBounce: result.kpis.avgBounce || 0, urgentCount: result.kpis.urgentCount || 0,
         },
         products: productsToSave,
       })
       showToast('✅ 保存しました（' + productsToSave.length + '件）', 'success')
-    } catch(e) {
-      showToast('保存に失敗: ' + e.message, 'error')
-    }
+    } catch(e) { showToast('保存に失敗: ' + e.message, 'error') }
     setSaving(false)
   }
 
@@ -123,36 +108,23 @@ export default function AnalyzerPage() {
       const result = await parseShopeeXLSX(file)
       result.kpis = calcKPIs(result.products)
       setData(result)
-      setTab('products') // ← ファイル読込後は商品詳細タブに留まる
+      setTab('products')
       setLoading(false)
       await saveToFirestore(result)
       return
-    } catch(e) {
-      alert('解析エラー: ' + e.message)
-    }
+    } catch(e) { alert('解析エラー: ' + e.message) }
     setLoading(false)
   }
 
-  // ソートハンドラ
   function handleSort(key) {
     if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
     else { setSortKey(key); setSortDir('desc') }
   }
 
-  function SortTh({ label, skey }) {
-    const active = sortKey === skey
-    return (
-      <th onClick={() => handleSort(skey)} style={{ cursor:'pointer', userSelect:'none', whiteSpace:'nowrap' }}>
-        {label} {active ? (sortDir === 'desc' ? '▼' : '▲') : '↕'}
-      </th>
-    )
-  }
-
-  // フィルタ・ソート済み商品リスト
   const filteredProducts = data ? data.products
     .filter(p => categoryFilter === 'all' || p.category === categoryFilter)
     .filter(p => (p.impressions || 0) >= minImpressions)
-    .filter(p => (p.orders || p.sales / 500 || 0) >= minSales)
+    .filter(p => (p.orders || 0) >= minSales)
     .sort((a, b) => {
       const av = a[sortKey] ?? 0, bv = b[sortKey] ?? 0
       return sortDir === 'desc' ? bv - av : av - bv
@@ -162,57 +134,83 @@ export default function AnalyzerPage() {
   const sorted = data ? [...data.products].sort((a,b) => b.priorityScore - a.priorityScore) : []
   const catCounts = data ? Object.entries(data.products.reduce((acc,p) => ({...acc,[p.category]:(acc[p.category]||0)+1}),{})).map(([k,v]) => ({ name:CATEGORY_LABELS[k], value:v, color:CATEGORY_COLORS[k] })) : []
 
+  function formatDate(ts) {
+    if (!ts) return '-'
+    const d = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000)
+    return d.toLocaleDateString('ja-JP', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const latestDateStr = latestHistory ? new Date(latestHistory.uploadedAt.seconds * 1000).toISOString().slice(0, 10) : null
+  const todayUploaded = latestDateStr === todayStr
+
+  // アップロード前のトップ画面
   if (!data && !loading) return (
-    <div style={{ maxWidth:800, margin:'2rem auto', padding:'0 1.5rem' }}>
+    <div style={{ maxWidth:900, margin:'0 auto', padding:'1.5rem' }}>
       <Toast msg={toast.msg} type={toast.type} />
-      <h2 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.8rem', letterSpacing:'0.04em', marginBottom:'1.5rem' }}>週次 XLSX アナライザー</h2>
+
+      {/* コクピットヘッダー */}
+      <div style={{ display:'flex', alignItems:'center', gap:'1rem', marginBottom:'1.5rem', flexWrap:'wrap' }}>
+        <div>
+          <h2 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.8rem', letterSpacing:'0.04em', margin:0 }}>ShopeeAnalyzer</h2>
+          <div style={{ fontSize:'0.7rem', color:'var(--dim2)' }}>コクピット · 分析 · タスク管理</div>
+        </div>
+      </div>
+
+      {/* ステータスカード */}
+      {!histLoading && (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:'1rem', marginBottom:'1.5rem' }}>
+          {/* アップ状況 */}
+          <div className="card" style={{ padding:'1.1rem', borderTop:'2px solid '+(todayUploaded?'var(--green)':'var(--yellow)') }}>
+            <div style={{ fontSize:'0.6rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.4rem' }}>今日のアップ</div>
+            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.6rem', color:todayUploaded?'var(--green)':'var(--yellow)', lineHeight:1 }}>{todayUploaded ? '✅ 完了' : '⚠️ 未'}</div>
+            {latestHistory && <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.3rem' }}>{latestDateStr}</div>}
+          </div>
+          {/* 緊急改善件数 */}
+          <div className="card" style={{ padding:'1.1rem', borderTop:'2px solid '+(urgentCount>0?'var(--red)':'var(--green)') }}>
+            <div style={{ fontSize:'0.6rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.4rem' }}>緊急改善タスク</div>
+            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.6rem', color:urgentCount>0?'var(--red)':'var(--green)', lineHeight:1 }}>{urgentCount !== null ? urgentCount+'件' : '-'}</div>
+            {latestHistory && <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.3rem' }}>最終分析より</div>}
+          </div>
+          {/* 最終ファイル */}
+          <div className="card" style={{ padding:'1.1rem', borderTop:'2px solid var(--purple)' }}>
+            <div style={{ fontSize:'0.6rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.4rem' }}>最終ファイル</div>
+            <div style={{ fontSize:'0.75rem', fontWeight:900, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{latestHistory?.filename || '未アップロード'}</div>
+            {latestHistory && <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.3rem' }}>{formatDate(latestHistory.uploadedAt)}</div>}
+          </div>
+          {/* ダッシュボードリンク */}
+          <div className="card" style={{ padding:'1.1rem', borderTop:'2px solid var(--orange)', cursor:'pointer' }} onClick={() => onNavigate && onNavigate('dashboard')}>
+            <div style={{ fontSize:'0.6rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.4rem' }}>数値ダッシュボード</div>
+            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.4rem', color:'var(--orange)', lineHeight:1 }}>📈 開く →</div>
+            <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.3rem' }}>ShopeeWorksDashboard</div>
+          </div>
+        </div>
+      )}
+
+      {/* ドロップエリア */}
       <div ref={dropRef} onClick={() => document.getElementById('xlsx-input').click()}
         onDragOver={e => { e.preventDefault(); dropRef.current.style.borderColor='var(--orange)' }}
         onDragLeave={() => dropRef.current.style.borderColor='rgba(255,107,43,0.3)'}
         onDrop={e => { e.preventDefault(); dropRef.current.style.borderColor='rgba(255,107,43,0.3)'; handleFile(e.dataTransfer.files[0]) }}
-        style={{ border:'2px dashed rgba(255,107,43,0.3)', borderRadius:20, padding:'4rem 2rem', textAlign:'center', cursor:'pointer', background:'rgba(255,107,43,0.02)', transition:'all 0.3s' }}>
-        <div style={{ fontSize:'3.5rem', marginBottom:'1rem' }}>📊</div>
-        <h3 style={{ fontWeight:900, marginBottom:'0.5rem' }}>XLSXファイルをドロップ</h3>
-        <p style={{ fontSize:'0.8rem', color:'var(--dim2)' }}>またはクリックしてファイルを選択</p>
-        <p style={{ fontSize:'0.72rem', color:'var(--dim)', marginTop:'0.5rem' }}>📋 <a href="https://seller.shopee.ph/datacenter/product/performance" target="_blank" style={{ color:'var(--orange)', textDecoration:'none' }}>seller.shopee.ph › Product Performance</a></p>
-        <p style={{ fontSize:'0.72rem', color:'var(--dim)', marginTop:'0.3rem' }}>⚠️ 期間は <strong style={{ color:'var(--dim2)' }}>「過去30日間」</strong> を選択してダウンロード</p>
+        style={{ border:'2px dashed rgba(255,107,43,0.3)', borderRadius:20, padding:'2.5rem 2rem', textAlign:'center', cursor:'pointer', background:'rgba(255,107,43,0.02)', transition:'all 0.3s', marginBottom:'1.5rem' }}>
+        <div style={{ fontSize:'2.5rem', marginBottom:'0.75rem' }}>📊</div>
+        <h3 style={{ fontWeight:900, marginBottom:'0.4rem', fontSize:'1rem' }}>XLSXファイルをドロップ</h3>
+        <p style={{ fontSize:'0.75rem', color:'var(--dim2)', margin:'0 0 0.4rem' }}>またはクリックしてファイルを選択</p>
+        <p style={{ fontSize:'0.68rem', color:'var(--dim)', margin:0 }}>📋 <a href="https://seller.shopee.ph/datacenter/product/performance" target="_blank" style={{ color:'var(--orange)', textDecoration:'none' }}>seller.shopee.ph › Product Performance</a> · 過去30日を選択</p>
         <input id="xlsx-input" type="file" accept=".xlsx,.xls" style={{ display:'none' }} onChange={e => handleFile(e.target.files[0])} />
       </div>
 
-      {/* 分析履歴 */}
-      <div style={{ marginTop:'1.5rem' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'1rem' }}>
-          <span style={{ fontSize:'0.8rem', fontWeight:700, color:'var(--dim2)' }}>📂 分析履歴</span>
-          <button className="btn-ghost" style={{ fontSize:'0.72rem' }} onClick={loadHistories}>🔄 更新</button>
+      {/* システム更新履歴 */}
+      <div className="card" style={{ padding:'1.1rem' }}>
+        <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.75rem' }}>🔄 システム更新履歴</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'0.4rem' }}>
+          {CHANGELOG.map((c, i) => (
+            <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'0.75rem', padding:'0.4rem 0', borderBottom: i < CHANGELOG.length-1 ? '1px solid var(--rim)' : 'none' }}>
+              <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.65rem', color:'var(--dim2)', whiteSpace:'nowrap', marginTop:'0.1rem' }}>{c.date}</span>
+              <span style={{ fontSize:'0.75rem', color:'var(--text)' }}>{c.text}</span>
+            </div>
+          ))}
         </div>
-        {histLoading && <div style={{ color:'var(--dim2)', fontSize:'0.8rem' }}>読み込み中...</div>}
-        {!histLoading && histories.length === 0 && (
-          <div style={{ textAlign:'center', padding:'2rem', color:'var(--dim)', fontSize:'0.8rem', border:'1px solid var(--rim)', borderRadius:12 }}>
-            まだ履歴がありません。XLSXをアップロードすると自動保存されます
-          </div>
-        )}
-        {!histLoading && histories.length > 0 && (
-          <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-            {histories.slice().reverse().map((h, i) => (
-              <div key={h.id} className="card" style={{ padding:'0.9rem 1.1rem', display:'grid', gridTemplateColumns:'auto 1fr auto', gap:'1rem', alignItems:'center' }}>
-                <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.4rem', color:'var(--orange)', minWidth:'1.6rem', textAlign:'center', lineHeight:1 }}>{i+1}</div>
-                <div>
-                  <div style={{ fontWeight:900, fontSize:'0.82rem', marginBottom:'0.25rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>📊 {h.filename}</div>
-                  <div style={{ display:'flex', gap:'0.75rem', flexWrap:'wrap' }}>
-                    <span style={{ fontSize:'0.68rem', color:'var(--dim2)' }}>🕒 {formatDate(h.uploadedAt)}</span>
-                    <span style={{ fontSize:'0.68rem', color:'var(--dim2)' }}>📦 {h.productCount}商品</span>
-                    <span style={{ fontSize:'0.68rem', color:'var(--orange)', fontWeight:700 }}>₱{(h.kpis?.totalSales||0).toLocaleString('en',{maximumFractionDigits:0})}</span>
-                    <span style={{ fontSize:'0.68rem', color:(h.kpis?.avgCtr||0)>3?'var(--green)':'var(--yellow)' }}>CTR {(h.kpis?.avgCtr||0).toFixed(2)}%</span>
-                  </div>
-                </div>
-                <div style={{ display:'flex', gap:'0.4rem' }}>
-                  <button onClick={() => loadAndRestore(h)} style={{ padding:'0.3rem 0.65rem', borderRadius:8, border:'1px solid rgba(255,107,43,0.3)', background:'rgba(255,107,43,0.08)', color:'var(--orange)', fontSize:'0.7rem', cursor:'pointer', fontWeight:700, fontFamily:"'Zen Kaku Gothic New',sans-serif" }}>復元</button>
-                  <button onClick={() => deleteHistory(h.id)} style={{ padding:'0.3rem 0.55rem', borderRadius:8, border:'1px solid var(--rim)', background:'transparent', color:'var(--dim)', fontSize:'0.7rem', cursor:'pointer' }}>🗑️</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   )
@@ -226,8 +224,6 @@ export default function AnalyzerPage() {
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
       <Toast msg={toast.msg} type={toast.type} />
-
-      {/* ファイル名バー */}
       <div style={{ background:'var(--surface)', borderBottom:'1px solid var(--rim)', padding:'0.75rem 1.5rem', display:'flex', alignItems:'center', gap:'1rem', flexWrap:'wrap', flexShrink:0 }}>
         <div>
           <div style={{ fontWeight:900, fontSize:'0.88rem' }}>{data.filename}</div>
@@ -236,20 +232,14 @@ export default function AnalyzerPage() {
             {saving && <span style={{ marginLeft:'0.5rem', color:'var(--orange)' }}>💾 保存中...</span>}
           </div>
         </div>
-        <button className="btn-ghost" style={{ marginLeft:'auto', fontSize:'0.75rem' }} onClick={() => { setData(null); setTab('overview') }}>← 別ファイル</button>
+        <button className="btn-ghost" style={{ marginLeft:'auto', fontSize:'0.75rem' }} onClick={() => { setData(null); setTab('overview') }}>← 戻る</button>
       </div>
-
-      {/* タブ */}
       <div style={{ background:'var(--surface)', borderBottom:'1px solid var(--rim)', display:'flex', overflowX:'auto', flexShrink:0 }}>
         {[['overview','📊 概要'],['products','🔍 商品詳細'],['roadmap','📅 ロードマップ'],['ai','🤖 AI提案']].map(([id,label]) => (
           <div key={id} onClick={() => setTab(id)} style={{ padding:'0.85rem 1.2rem', cursor:'pointer', fontSize:'0.8rem', fontWeight:700, color:tab===id?'var(--orange)':'var(--dim2)', borderBottom:tab===id?'2px solid var(--orange)':'2px solid transparent', whiteSpace:'nowrap', transition:'all 0.2s' }}>{label}</div>
         ))}
       </div>
-
-      {/* コンテンツ */}
       <div style={{ flex:1, overflow:'auto' }}>
-
-        {/* 概要タブ */}
         {tab==='overview' && (
           <div className="fade-up" style={{ maxWidth:1200, margin:'0 auto', padding:'1.5rem' }}>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:'1rem', marginBottom:'1.5rem' }}>
@@ -282,13 +272,9 @@ export default function AnalyzerPage() {
             </div>
           </div>
         )}
-
-        {/* 商品詳細タブ（枠固定＋ソート＋フィルタ） */}
         {tab==='products' && (
           <div className="fade-up" style={{ display:'flex', flexDirection:'column', height:'100%' }}>
-            {/* フィルタバー */}
             <div style={{ padding:'0.75rem 1.5rem', borderBottom:'1px solid var(--rim)', background:'var(--surface)', display:'flex', gap:'0.75rem', flexWrap:'wrap', alignItems:'center', flexShrink:0 }}>
-              {/* カテゴリフィルタ */}
               <div style={{ display:'flex', gap:'0.35rem', flexWrap:'wrap' }}>
                 {['all',...Object.keys(CATEGORY_LABELS)].map(k => (
                   <button key={k} onClick={() => setCategoryFilter(k)} style={{ padding:'0.28rem 0.7rem', borderRadius:8, cursor:'pointer', fontSize:'0.7rem', border:'1px solid var(--rim)', background:categoryFilter===k?'rgba(255,107,43,0.1)':'var(--card)', color:categoryFilter===k?'var(--orange)':'var(--dim2)', fontFamily:"'Zen Kaku Gothic New',sans-serif", fontWeight:700 }}>
@@ -296,27 +282,24 @@ export default function AnalyzerPage() {
                   </button>
                 ))}
               </div>
-              {/* 条件フィルタ */}
               <div style={{ display:'flex', gap:'0.5rem', alignItems:'center', marginLeft:'auto' }}>
-                <label style={{ fontSize:'0.68rem', color:'var(--dim2)', whiteSpace:'nowrap' }}>表示件数: <strong style={{ color:'var(--orange)' }}>{filteredProducts.length}</strong>件</label>
+                <label style={{ fontSize:'0.68rem', color:'var(--dim2)', whiteSpace:'nowrap' }}>表示: <strong style={{ color:'var(--orange)' }}>{filteredProducts.length}</strong>件</label>
                 <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', background:'var(--card)', border:'1px solid var(--rim)', borderRadius:8, padding:'0.25rem 0.6rem' }}>
                   <span style={{ fontSize:'0.65rem', color:'var(--dim2)' }}>IMP≥</span>
                   <input type="number" value={minImpressions} onChange={e => setMinImpressions(Number(e.target.value))} style={{ width:50, background:'transparent', border:'none', color:'var(--text)', fontSize:'0.72rem', fontFamily:"'DM Mono',monospace", outline:'none' }} min="0" />
                 </div>
                 <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', background:'var(--card)', border:'1px solid var(--rim)', borderRadius:8, padding:'0.25rem 0.6rem' }}>
-                  <span style={{ fontSize:'0.65rem', color:'var(--dim2)' }}>販売≥</span>
+                  <span style={{ fontSize:'0.65rem', color:'var(--dim2)' }}>受注≥</span>
                   <input type="number" value={minSales} onChange={e => setMinSales(Number(e.target.value))} style={{ width:40, background:'transparent', border:'none', color:'var(--text)', fontSize:'0.72rem', fontFamily:"'DM Mono',monospace", outline:'none' }} min="0" />
                 </div>
                 <button onClick={() => { setCategoryFilter('all'); setMinImpressions(0); setMinSales(0); setSortKey('priorityScore'); setSortDir('desc') }} style={{ padding:'0.28rem 0.6rem', borderRadius:8, border:'1px solid var(--rim)', background:'transparent', color:'var(--dim2)', fontSize:'0.65rem', cursor:'pointer' }}>リセット</button>
               </div>
             </div>
-
-            {/* 枠固定テーブル */}
             <div style={{ flex:1, overflow:'auto', padding:'0 1.5rem 1.5rem' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'0.8rem' }}>
                 <thead style={{ position:'sticky', top:0, zIndex:10, background:'var(--surface)' }}>
                   <tr style={{ borderBottom:'2px solid var(--rim2)' }}>
-                    <th style={{ padding:'0.6rem 0.5rem', textAlign:'left', fontSize:'0.65rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', whiteSpace:'nowrap', minWidth:30 }}>#</th>
+                    <th style={{ padding:'0.6rem 0.5rem', textAlign:'left', fontSize:'0.65rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', minWidth:30 }}>#</th>
                     <th style={{ padding:'0.6rem 0.5rem', textAlign:'left', fontSize:'0.65rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', minWidth:200 }}>商品名</th>
                     {[['sales','売上(₱)'],['impressions','IMP'],['orders','受注数'],['ctr','CTR%'],['cvr','CVR%'],['bounce','バウンス%'],['priorityScore','優先度']].map(([key,label]) => (
                       <th key={key} onClick={() => handleSort(key)} style={{ padding:'0.6rem 0.5rem', textAlign:'center', fontSize:'0.65rem', color:sortKey===key?'var(--orange)':'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', cursor:'pointer', userSelect:'none', whiteSpace:'nowrap' }}>
@@ -343,22 +326,16 @@ export default function AnalyzerPage() {
                   ))}
                 </tbody>
               </table>
-              {filteredProducts.length === 0 && (
-                <div style={{ textAlign:'center', padding:'3rem', color:'var(--dim2)', fontSize:'0.85rem' }}>
-                  条件に一致する商品がありません
-                </div>
-              )}
+              {filteredProducts.length === 0 && <div style={{ textAlign:'center', padding:'3rem', color:'var(--dim2)', fontSize:'0.85rem' }}>条件に一致する商品がありません</div>}
             </div>
           </div>
         )}
-
-        {/* ロードマップタブ */}
         {tab==='roadmap' && (
           <div className="fade-up" style={{ maxWidth:1200, margin:'0 auto', padding:'1.5rem' }}>
             <div className="sec-hdr"><span className="sec-title">30日間 改善ロードマップ</span><span className="count-badge">{Math.min(sorted.length,30)}件</span></div>
             <div style={{ display:'flex', flexDirection:'column', gap:'0.55rem' }}>
               {sorted.slice(0,30).map((p,i) => {
-                const d = new Date(2026,2,15); d.setDate(d.getDate()+i)
+                const d = new Date(2026,2,11); d.setDate(d.getDate()+i)
                 const lbl = (d.getMonth()+1)+'/'+d.getDate()+'('+'日月火水木金土'[d.getDay()]+')'
                 return (
                   <div key={i} className="card" style={{ padding:'1rem 1.25rem', display:'grid', gridTemplateColumns:'auto 1fr auto', gap:'1rem', alignItems:'center' }}>
@@ -371,14 +348,12 @@ export default function AnalyzerPage() {
             </div>
           </div>
         )}
-
-        {/* AIタブ */}
         {tab==='ai' && (
           <div className="fade-up" style={{ maxWidth:1200, margin:'0 auto', padding:'1.5rem' }}>
             <div style={{ background:'var(--card)', border:'1px solid rgba(0,212,170,0.2)', borderRadius:20, overflow:'hidden' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:'1rem', padding:'1rem 1.5rem', background:'linear-gradient(135deg,rgba(0,212,170,0.06),rgba(0,212,170,0.02))', borderBottom:'1px solid rgba(0,212,170,0.12)', flexWrap:'wrap' }}>
-                <div style={{ fontSize:'1.5rem' }}>🤖</div>
-                <div><div style={{ fontSize:'0.9rem', fontWeight:900, color:'var(--ai)' }}>Claude AI 改善アドバイザー</div><div style={{ fontSize:'0.72rem', color:'var(--dim2)' }}>4月以降利用可能になります</div></div>
+              <div style={{ padding:'1rem 1.5rem', background:'linear-gradient(135deg,rgba(0,212,170,0.06),rgba(0,212,170,0.02))', borderBottom:'1px solid rgba(0,212,170,0.12)' }}>
+                <div style={{ fontSize:'0.9rem', fontWeight:900, color:'var(--ai)' }}>🤖 Claude AI 改善アドバイザー</div>
+                <div style={{ fontSize:'0.72rem', color:'var(--dim2)' }}>4月以降利用可能になります</div>
               </div>
               <div style={{ padding:'3rem', textAlign:'center', color:'var(--dim2)' }}>
                 <div style={{ fontSize:'2.5rem', marginBottom:'0.75rem', opacity:0.4 }}>🔧</div>
@@ -387,7 +362,6 @@ export default function AnalyzerPage() {
             </div>
           </div>
         )}
-
       </div>
     </div>
   )

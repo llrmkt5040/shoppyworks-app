@@ -10,7 +10,7 @@ import PlanPage from "../pages/PlanPage"
 import SettingsPage from "../pages/SettingsPage"
 
 const NAV = [
-  { id: "dashboard",  icon: "🏠", label: "ダッシュボード",        sub: "週次推移"   },
+  { id: "dashboard",  icon: "📈", label: "ShopeeWorksDashboard", sub: "数値管理"   },
   { id: "analyzer",   icon: "📊", label: "ShopeeAnalyzer",      sub: "商品分析"   },
   { id: "actionlog",  icon: "📅", label: "ShopeeDiary",         sub: "日次管理"   },
   { id: "inventory",  icon: "📦", label: "ShopeeStockManager",  sub: "在庫棚卸"   },
@@ -22,7 +22,7 @@ const NAV = [
 export default function AppLayout() {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [page, setPage] = useState("dashboard")
+  const [page, setPage] = useState("analyzer")
   const [sideOpen, setSideOpen] = useState(true)
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function AppLayout() {
     const uid = profile?.uid || user?.uid
     switch (page) {
       case "dashboard": return <DashboardPage uid={uid} />
-      case "analyzer":  return <AnalyzerPage uid={uid} />
+      case "analyzer":  return <AnalyzerPage uid={uid} onNavigate={setPage} />
       case "actionlog": return <ActionLogPage uid={uid} />
       case "inventory": return <InventoryPage uid={uid} />
       case "requests":  return <RequestsPage uid={uid} />
