@@ -201,6 +201,35 @@ export default function AnalyzerPage({ onNavigate }) {
         </div>
       )}
 
+      {/* アップロード履歴 */}
+      {histories.length > 0 && (
+        <div className="card" style={{ padding:'1.1rem', marginTop:'1rem' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'0.75rem' }}>
+            <span style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700 }}>📂 アップロード履歴</span>
+            <span style={{ fontSize:'0.65rem', color:'var(--orange)', fontWeight:700 }}>{histories.length}件</span>
+            <button className="btn-ghost" style={{ marginLeft:'auto', fontSize:'0.65rem' }} onClick={loadLatestHistory}>🔄</button>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:'0.4rem' }}>
+            {histories.map((h, i) => (
+              <div key={h.id} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap:'0.75rem', alignItems:'center', padding:'0.5rem 0.6rem', background:'rgba(255,255,255,0.02)', borderRadius:8, border:'1px solid var(--rim)' }}>
+                <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.2rem', color:'var(--orange)', minWidth:'1.5rem', textAlign:'center', lineHeight:1 }}>{i+1}</div>
+                <div>
+                  <div style={{ fontSize:'0.75rem', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:'0.15rem' }}>{h.filename}</div>
+                  <div style={{ display:'flex', gap:'0.6rem', flexWrap:'wrap' }}>
+                    <span style={{ fontSize:'0.65rem', color:'var(--dim2)' }}>🕒 {formatDate(h.uploadedAt)}</span>
+                    <span style={{ fontSize:'0.65rem', color:'var(--orange)', fontWeight:700 }}>₱{(h.kpis?.totalSales||0).toLocaleString('en',{maximumFractionDigits:0})}</span>
+                    <span style={{ fontSize:'0.65rem', color:'var(--dim2)' }}>📦 {h.productCount}商品</span>
+                    <span style={{ fontSize:'0.65rem', color:(h.kpis?.urgentCount||0)>0?'var(--red)':'var(--dim2)' }}>🔴 緊急{h.kpis?.urgentCount||0}件</span>
+                  </div>
+                </div>
+                <button onClick={() => loadAndRestore(h)} style={{ padding:'0.28rem 0.6rem', borderRadius:8, border:'1px solid rgba(255,107,43,0.3)', background:'rgba(255,107,43,0.08)', color:'var(--orange)', fontSize:'0.68rem', cursor:'pointer', fontWeight:700, fontFamily:"'Zen Kaku Gothic New',sans-serif", whiteSpace:'nowrap' }}>復元</button>
+                <button onClick={() => deleteHistory(h.id)} style={{ padding:'0.28rem 0.5rem', borderRadius:8, border:'1px solid var(--rim)', background:'transparent', color:'var(--dim)', fontSize:'0.68rem', cursor:'pointer' }}>🗑️</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ドロップエリア */}
       <div ref={dropRef} onClick={() => document.getElementById('xlsx-input').click()}
         onDragOver={e => { e.preventDefault(); dropRef.current.style.borderColor='var(--orange)' }}
@@ -378,34 +407,6 @@ export default function AnalyzerPage({ onNavigate }) {
         )}
       </div>
 
-      {/* アップロード履歴 */}
-      {histories.length > 0 && (
-        <div className="card" style={{ padding:'1.1rem', marginTop:'1rem' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'0.75rem' }}>
-            <span style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700 }}>📂 アップロード履歴</span>
-            <span style={{ fontSize:'0.65rem', color:'var(--orange)', fontWeight:700 }}>{histories.length}件</span>
-            <button className="btn-ghost" style={{ marginLeft:'auto', fontSize:'0.65rem' }} onClick={loadLatestHistory}>🔄</button>
-          </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:'0.4rem' }}>
-            {histories.map((h, i) => (
-              <div key={h.id} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap:'0.75rem', alignItems:'center', padding:'0.5rem 0.6rem', background:'rgba(255,255,255,0.02)', borderRadius:8, border:'1px solid var(--rim)' }}>
-                <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.2rem', color:'var(--orange)', minWidth:'1.5rem', textAlign:'center', lineHeight:1 }}>{i+1}</div>
-                <div>
-                  <div style={{ fontSize:'0.75rem', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:'0.15rem' }}>{h.filename}</div>
-                  <div style={{ display:'flex', gap:'0.6rem', flexWrap:'wrap' }}>
-                    <span style={{ fontSize:'0.65rem', color:'var(--dim2)' }}>🕒 {formatDate(h.uploadedAt)}</span>
-                    <span style={{ fontSize:'0.65rem', color:'var(--orange)', fontWeight:700 }}>₱{(h.kpis?.totalSales||0).toLocaleString('en',{maximumFractionDigits:0})}</span>
-                    <span style={{ fontSize:'0.65rem', color:'var(--dim2)' }}>📦 {h.productCount}商品</span>
-                    <span style={{ fontSize:'0.65rem', color:(h.kpis?.urgentCount||0)>0?'var(--red)':'var(--dim2)' }}>🔴 緊急{h.kpis?.urgentCount||0}件</span>
-                  </div>
-                </div>
-                <button onClick={() => loadAndRestore(h)} style={{ padding:'0.28rem 0.6rem', borderRadius:8, border:'1px solid rgba(255,107,43,0.3)', background:'rgba(255,107,43,0.08)', color:'var(--orange)', fontSize:'0.68rem', cursor:'pointer', fontWeight:700, fontFamily:"'Zen Kaku Gothic New',sans-serif", whiteSpace:'nowrap' }}>復元</button>
-                <button onClick={() => deleteHistory(h.id)} style={{ padding:'0.28rem 0.5rem', borderRadius:8, border:'1px solid var(--rim)', background:'transparent', color:'var(--dim)', fontSize:'0.68rem', cursor:'pointer' }}>🗑️</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
