@@ -6,7 +6,6 @@ import AnalyzerPage from "../pages/AnalyzerPage"
 import ActionLogPage from "../pages/ActionLogPage"
 import InventoryPage from "../pages/InventoryPage"
 import RequestsPage from "../pages/RequestsPage"
-import PlanPage from "../pages/PlanPage"
 import SettingsPage from "../pages/SettingsPage"
 
 const NAV = [
@@ -15,7 +14,6 @@ const NAV = [
   { id: "actionlog",  icon: "📅", label: "ShopeeDiary",         sub: "日次管理"   },
   { id: "inventory",  icon: "📦", label: "ShopeeStockManager",  sub: "在庫棚卸"   },
   { id: "requests",   icon: "🛍️", label: "PasabuyManager",      sub: "御用聞き"   },
-  { id: "plan",       icon: "🎯", label: "ShopeeRoadmap",       sub: "行動管理"   },
   { id: "settings",   icon: "⚙️", label: "設定",                sub: ""           },
 ]
 
@@ -50,7 +48,6 @@ export default function AppLayout() {
       case "actionlog": return <ActionLogPage uid={uid} />
       case "inventory": return <InventoryPage uid={uid} />
       case "requests":  return <RequestsPage uid={uid} />
-      case "plan":      return <PlanPage uid={uid} />
       case "settings":  return <SettingsPage uid={uid} profile={profile} />
       default:          return <DashboardPage uid={uid} />
     }
