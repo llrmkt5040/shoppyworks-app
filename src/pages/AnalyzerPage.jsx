@@ -1,8 +1,25 @@
 import { useState, useRef } from 'react'
 import { parseShopeeXLSX, calcKPIs, CATEGORY_LABELS, CATEGORY_COLORS } from '../lib/xlsx'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
+import { db, auth } from '../lib/firebase'
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 
 const API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY
+
+function Toast({ msg, type }) {
+  if (!msg) return null
+  const bg = type === 'success' ? '#16a34a' : '#dc2626'
+  return (
+    <div style={{
+      position: 'fixed', bottom: '1.5rem', right: '1.5rem',
+      background: bg, color: '#fff', padding: '0.75rem 1.25rem',
+      borderRadius: 12, fontSize: '0.82rem', fontWeight: 700,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.3)', zIndex: 9999,
+    }}>
+      {msg}
+    </div>
+  )
+}
 
 export default function AnalyzerPage() {
   const [data, setData] = useState(null)
@@ -11,7 +28,53 @@ export default function AnalyzerPage() {
   const [filter, setFilter] = useState('all')
   const [aiText, setAiText] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
+  const [toast, setToast] = useState({ msg: '', type: 'success' })
+  const [saving, setSaving] = useState(false)
   const dropRef = useRef()
+
+  function showToast(msg, type = 'success') {
+    setToast({ msg, type })
+    setTimeout(() => setToast({ msg: '', type: 'success' }), 3000)
+  }
+
+  async function saveToFirestore(result) {
+    setSaving(true)
+    try {
+      const userId = auth.currentUser?.uid || 'anonymous'
+      const productsToSave = result.products.slice(0, 100).map(p => ({
+        name: p.name || '',
+        sales: p.sales || 0,
+        ctr: p.ctr || 0,
+        cvr: p.cvr || 0,
+        bounce: p.bounce || 0,
+        category: p.category || '',
+        priorityScore: p.priorityScore || 0,
+      }))
+      const docData = {
+        userId,
+        filename: result.filename || 'unknown.xlsx',
+        uploadedAt: serverTimestamp(),
+        productCount: result.products.length,
+        savedCount: productsToSave.length,
+        kpis: {
+          totalSales: result.kpis.totalSales || 0,
+          productCount: result.kpis.productCount || 0,
+          avgCtr: result.kpis.avgCtr || 0,
+          avgCvr: result.kpis.avgCvr || 0,
+          avgBounce: result.kpis.avgBounce || 0,
+          urgentCount: result.kpis.urgentCount || 0,
+        },
+        products: productsToSave,
+      }
+      const docRef = await addDoc(collection(db, 'xlsx_analyses'), docData)
+      console.log('Firestore保存成功:', docRef.id)
+      showToast('✅ 保存しました（' + productsToSave.length + '件）', 'success')
+    } catch (e) {
+      console.error('Firestore保存エラー:', e)
+      showToast('⚠️ 保存に失敗しました: ' + e.message, 'error')
+    }
+    setSaving(false)
+  }
 
   async function handleFile(file) {
     if (!file) return
@@ -20,9 +83,12 @@ export default function AnalyzerPage() {
       const result = await parseShopeeXLSX(file)
       result.kpis = calcKPIs(result.products)
       setData(result)
-    } catch (e) { 
-      console.error('AI Error:', e)
-      alert('解析エラー: ' + e.message + '\n\nAPIキー: ' + (API_KEY ? API_KEY.substring(0,20) + '...' : 'なし'))
+      setLoading(false)
+      await saveToFirestore(result)
+      return
+    } catch (e) {
+      console.error('解析エラー:', e)
+      alert('解析エラー: ' + e.message)
     }
     setLoading(false)
   }
@@ -32,36 +98,19 @@ export default function AnalyzerPage() {
     setAiLoading(true); setAiText('')
     const { products, kpis } = data
     const top10 = [...products].sort((a,b) => b.priorityScore - a.priorityScore).slice(0,10)
-    const prompt = `あなたはShopeeフィリピン(PH)販売のエキスパートです。以下のデータをもとに日本語で具体的な改善提案を生成してください。
-
-【全体KPI】総売上:₱${kpis.totalSales?.toLocaleString()} | 商品数:${kpis.productCount}件 | 平均CTR:${kpis.avgCtr?.toFixed(2)}% | 平均CVR:${kpis.avgCvr?.toFixed(2)}% | バウンス率:${kpis.avgBounce?.toFixed(1)}%
-
-【優先度上位10商品】
-${top10.map((p,i) => `${i+1}. ${p.name} | 売上₱${p.sales.toLocaleString()} | CTR:${p.ctr.toFixed(2)}% CVR:${p.cvr.toFixed(2)}% | 判定:${CATEGORY_LABELS[p.category]}`).join('\n')}
-
-以下の構成で回答してください：
-## 📊 ショップ全体の診断
-## 🔴 最優先3商品の改善アクション
-## 💡 全商品共通の横断的施策（3つ）
-## 🎯 今週のアクションプラン`
-
+    const prompt = `あなたはShopeeフィリピン(PH)販売のエキスパートです。以下のデータをもとに日本語で具体的な改善提案を生成してください。\n\n【全体KPI】総売上:₱${kpis.totalSales?.toLocaleString()} | 商品数:${kpis.productCount}件 | 平均CTR:${kpis.avgCtr?.toFixed(2)}% | 平均CVR:${kpis.avgCvr?.toFixed(2)}% | バウンス率:${kpis.avgBounce?.toFixed(1)}%\n\n【優先度上位10商品】\n${top10.map((p,i) => i+1+'. '+p.name+' | 売上₱'+p.sales.toLocaleString()+' | CTR:'+p.ctr.toFixed(2)+'% CVR:'+p.cvr.toFixed(2)+'% | 判定:'+CATEGORY_LABELS[p.category]).join('\n')}\n\n以下の構成で回答してください：\n## 📊 ショップ全体の診断\n## 🔴 最優先3商品の改善アクション\n## 💡 全商品共通の横断的施策（3つ）\n## 🎯 今週のアクションプラン`
     try {
-      const res = await fetch('/api/anthropic/v1/messages', {
+      const res = await fetch('http://localhost:3001', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1500, messages:[{ role:'user', content:prompt }] })
       })
-      if (!res.ok) {
-        const errBody = await res.text()
-        throw new Error('API Error: ' + res.status + ' / ' + errBody)
-      }
+      if (!res.ok) { const errBody = await res.text(); throw new Error('API Error: ' + res.status + ' / ' + errBody) }
       const json = await res.json()
       setAiText(json.content?.[0]?.text || '応答がありませんでした')
-    } catch (e) { 
+    } catch (e) {
       console.error('AI Error:', e)
-      setAiText('⚠️ エラー: ' + e.message + ' / ' + (e.cause || ''))
+      setAiText('⚠️ エラー: ' + e.message)
     }
     setAiLoading(false)
   }
@@ -73,6 +122,7 @@ ${top10.map((p,i) => `${i+1}. ${p.name} | 売上₱${p.sales.toLocaleString()} |
 
   if (!data && !loading) return (
     <div style={{ maxWidth:800, margin:'2rem auto', padding:'0 1.5rem' }}>
+      <Toast msg={toast.msg} type={toast.type} />
       <h2 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.8rem', letterSpacing:'0.04em', marginBottom:'1.5rem' }}>週次 XLSX アナライザー</h2>
       <div ref={dropRef} onClick={() => document.getElementById('xlsx-input').click()}
         onDragOver={e => { e.preventDefault(); dropRef.current.style.borderColor='var(--orange)' }}
@@ -89,12 +139,23 @@ ${top10.map((p,i) => `${i+1}. ${p.name} | 売上₱${p.sales.toLocaleString()} |
     </div>
   )
 
-  if (loading) return <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'50vh', gap:'1rem' }}><div className="spinner" /><p style={{ color:'var(--dim2)' }}>解析中...</p></div>
+  if (loading) return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'50vh', gap:'1rem' }}>
+      <div className="spinner" /><p style={{ color:'var(--dim2)' }}>解析中...</p>
+    </div>
+  )
 
   return (
     <div>
+      <Toast msg={toast.msg} type={toast.type} />
       <div style={{ background:'var(--surface)', borderBottom:'1px solid var(--rim)', padding:'0.75rem 1.5rem', display:'flex', alignItems:'center', gap:'1rem', flexWrap:'wrap' }}>
-        <div><div style={{ fontWeight:900, fontSize:'0.88rem' }}>{data.filename}</div><div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontFamily:"'DM Mono',monospace" }}>{data.products.length}商品 分析完了</div></div>
+        <div>
+          <div style={{ fontWeight:900, fontSize:'0.88rem' }}>{data.filename}</div>
+          <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontFamily:"'DM Mono',monospace" }}>
+            {data.products.length}商品 分析完了
+            {saving && <span style={{ marginLeft:'0.5rem', color:'var(--orange)' }}>💾 保存中...</span>}
+          </div>
+        </div>
         <button className="btn-ghost" style={{ marginLeft:'auto', fontSize:'0.75rem' }} onClick={() => { setData(null); setAiText('') }}>← 別ファイル</button>
       </div>
       <div style={{ background:'var(--surface)', borderBottom:'1px solid var(--rim)', display:'flex', overflowX:'auto', padding:'0 1.5rem' }}>
@@ -191,7 +252,7 @@ ${top10.map((p,i) => `${i+1}. ${p.name} | 売上₱${p.sales.toLocaleString()} |
               <div style={{ padding:'1.5rem', minHeight:200 }}>
                 {!aiText && !aiLoading && <div style={{ textAlign:'center', padding:'2rem', color:'var(--dim2)' }}><div style={{ fontSize:'2.5rem', marginBottom:'0.75rem', opacity:0.4 }}>🤖</div><div style={{ fontSize:'0.85rem' }}>「AI分析を開始する」ボタンを押してください</div></div>}
                 {aiLoading && <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', color:'var(--dim2)', fontSize:'0.85rem' }}><div className="spinner" style={{ width:24, height:24, borderWidth:2 }} />分析中...</div>}
-                {aiText && <div style={{ fontSize:'0.84rem', lineHeight:1.9, color:'var(--dim2)' }} dangerouslySetInnerHTML={{ __html: aiText.replace(/## (.*)/g,'<div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--ai);margin-top:1.25rem;margin-bottom:0.4rem">$1</div>').replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--text)">$1</strong>').replace(/\n/g,'<br>') }} />}
+                {aiText && <div style={{ fontSize:'0.84rem', lineHeight:1.9, color:'var(--dim2)' }} dangerouslySetInnerHTML={{ __html: aiText.replace(/## (.*)/g,'<h4 style="color:var(--ai);margin-top:1rem">$1</h4>').replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--text)">$1</strong>').replace(/\n/g,'<br>') }} />}
               </div>
             </div>
           </div>
