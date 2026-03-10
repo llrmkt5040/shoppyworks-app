@@ -22,6 +22,7 @@ export default function AppLayout() {
   const [profile, setProfile] = useState(null)
   const [page, setPage] = useState("analyzer")
   const [sideOpen, setSideOpen] = useState(true)
+  const [userMenu, setUserMenu] = useState(false)
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
@@ -74,9 +75,33 @@ export default function AppLayout() {
           })}
         </nav>
         {user && (
-          <div style={{ padding: sideOpen ? "0.75rem 1rem" : "0.75rem 0", borderTop: "1px solid var(--rim)", display: "flex", alignItems: "center", gap: "0.5rem", justifyContent: sideOpen ? "flex-start" : "center" }}>
-            {user.photoURL ? <img src={user.photoURL} style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0 }} /> : <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--orange)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", color: "#fff", flexShrink: 0 }}>{(user.displayName||"U")[0]}</div>}
-            {sideOpen && (<div style={{ flex: 1, overflow: "hidden" }}><div style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{profile?.name || user.displayName}</div><button onClick={() => signOut(auth)} style={{ fontSize: "0.6rem", color: "var(--dim2)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>ログアウト</button></div>)}
+          <div style={{ position: "relative", padding: sideOpen ? "0.75rem 1rem" : "0.75rem 0", borderTop: "1px solid var(--rim)" }}>
+            <div onClick={() => setUserMenu(o => !o)} style={{ display: "flex", alignItems: "center", gap: "0.5rem", justifyContent: sideOpen ? "flex-start" : "center", cursor: "pointer", borderRadius: 8, padding: "0.25rem 0.35rem", transition: "background 0.15s" }} onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.05)"} onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+              {user.photoURL
+                ? <img src={user.photoURL} style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, border: "2px solid var(--orange)" }} />
+                : <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg,var(--orange),#fb923c)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8rem", color: "#fff", flexShrink: 0, fontWeight: 900 }}>{(profile?.name || user.displayName || user.email || "U")[0].toUpperCase()}</div>}
+              {sideOpen && (
+                <div style={{ flex: 1, overflow: "hidden" }}>
+                  <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{profile?.name || user.displayName || "ユーザー"}</div>
+                  <div style={{ fontSize: "0.6rem", color: "var(--dim2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
+                </div>
+              )}
+              {sideOpen && <span style={{ fontSize: "0.6rem", color: "var(--dim2)" }}>{userMenu ? "▲" : "▼"}</span>}
+            </div>
+            {userMenu && (
+              <div style={{ position: "absolute", bottom: "100%", left: sideOpen ? "0.5rem" : "-80px", width: 180, background: "var(--surface)", border: "1px solid var(--rim2)", borderRadius: 10, overflow: "hidden", boxShadow: "0 -4px 24px rgba(0,0,0,0.4)", zIndex: 100 }}>
+                <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid var(--rim)" }}>
+                  <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text)" }}>{profile?.name || user.displayName || "ユーザー"}</div>
+                  <div style={{ fontSize: "0.6rem", color: "var(--dim2)", marginTop: "0.1rem", wordBreak: "break-all" }}>{user.email}</div>
+                </div>
+                <button onClick={() => { setUserMenu(false); setPage("settings") }} style={{ width: "100%", padding: "0.6rem 1rem", background: "transparent", border: "none", color: "var(--text)", fontSize: "0.75rem", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: "0.5rem" }} onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.05)"} onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                  ⚙️ 設定
+                </button>
+                <button onClick={() => { setUserMenu(false); signOut(auth) }} style={{ width: "100%", padding: "0.6rem 1rem", background: "transparent", border: "none", color: "#ef4444", fontSize: "0.75rem", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: "0.5rem" }} onMouseEnter={e => e.currentTarget.style.background="rgba(239,68,68,0.08)"} onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                  🚪 ログアウト
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
