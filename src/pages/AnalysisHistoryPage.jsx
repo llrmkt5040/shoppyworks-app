@@ -16,11 +16,10 @@ export default function AnalysisHistoryPage() {
       const userId = auth.currentUser?.uid || 'anonymous'
       const q = query(
         collection(db, 'xlsx_analyses'),
-        where('userId', '==', userId),
-        orderBy('uploadedAt', 'desc')
+        where('userId', '==', userId)
       )
       const snap = await getDocs(q)
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.uploadedAt?.seconds||0) - (a.uploadedAt?.seconds||0))
       setHistories(list)
     } catch (e) {
       console.error('履歴取得エラー:', e)
