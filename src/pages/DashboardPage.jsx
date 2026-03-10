@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { db, auth } from '../lib/firebase'
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import { collection, getDocs } from 'firebase/firestore'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts'
 
 export default function DashboardPage() {
@@ -13,12 +13,11 @@ export default function DashboardPage() {
     setLoading(true)
     try {
       const userId = auth.currentUser?.uid || 'anonymous'
-      const q = query(collection(db, 'xlsx_analyses'), where('userId', '==', userId))
-      const snap = await getDocs(q)
+      const snap = await getDocs(collection(db, 'xlsx_analyses'))
       const list = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(d => d.uploadedAt)
-        .sort((a, b) => (a.uploadedAt?.seconds || 0) - (b.uploadedAt?.seconds || 0))
+        .filter(d => d.userId === userId && d.uploadedAt && d.uploadedAt.seconds)
+        .sort((a, b) => (a.uploadedAt.seconds) - (b.uploadedAt.seconds))
       setHistories(list)
     } catch(e) { console.error(e) }
     setLoading(false)
