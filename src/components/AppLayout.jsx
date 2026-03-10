@@ -1,28 +1,28 @@
 import { useState, useEffect } from "react"
 import { auth } from "../lib/firebase"
 import { onAuthStateChanged, signOut } from "firebase/auth"
+import DashboardPage from "../pages/DashboardPage"
 import AnalyzerPage from "../pages/AnalyzerPage"
 import ActionLogPage from "../pages/ActionLogPage"
 import InventoryPage from "../pages/InventoryPage"
 import RequestsPage from "../pages/RequestsPage"
 import PlanPage from "../pages/PlanPage"
 import SettingsPage from "../pages/SettingsPage"
-import AnalysisHistoryPage from "../pages/AnalysisHistoryPage"
 
 const NAV = [
+  { id: "dashboard",  icon: "🏠", label: "ダッシュボード",        sub: "週次推移"   },
   { id: "analyzer",   icon: "📊", label: "ShopeeAnalyzer",      sub: "商品分析"   },
   { id: "actionlog",  icon: "📅", label: "ShopeeDiary",         sub: "日次管理"   },
   { id: "inventory",  icon: "📦", label: "ShopeeStockManager",  sub: "在庫棚卸"   },
   { id: "requests",   icon: "🛍️", label: "PasabuyManager",      sub: "御用聞き"   },
   { id: "plan",       icon: "🎯", label: "ShopeeRoadmap",       sub: "行動管理"   },
-  { id: "history",    icon: "📂", label: "分析履歴",             sub: "XLSX履歴"   },
   { id: "settings",   icon: "⚙️", label: "設定",                sub: ""           },
 ]
 
 export default function AppLayout() {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [page, setPage] = useState("requests")
+  const [page, setPage] = useState("dashboard")
   const [sideOpen, setSideOpen] = useState(true)
 
   useEffect(() => {
@@ -45,14 +45,14 @@ export default function AppLayout() {
   function renderPage() {
     const uid = profile?.uid || user?.uid
     switch (page) {
+      case "dashboard": return <DashboardPage uid={uid} />
       case "analyzer":  return <AnalyzerPage uid={uid} />
       case "actionlog": return <ActionLogPage uid={uid} />
       case "inventory": return <InventoryPage uid={uid} />
       case "requests":  return <RequestsPage uid={uid} />
       case "plan":      return <PlanPage uid={uid} />
-      case "history":   return <AnalysisHistoryPage uid={uid} />
       case "settings":  return <SettingsPage uid={uid} profile={profile} />
-      default:          return <RequestsPage uid={uid} />
+      default:          return <DashboardPage uid={uid} />
     }
   }
 
