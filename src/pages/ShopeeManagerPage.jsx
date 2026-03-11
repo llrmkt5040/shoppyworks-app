@@ -175,7 +175,7 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
   const activeData = incomeTab === "toRelease" ? incomeData : releasedData
   const activeFileName = incomeTab === "toRelease" ? fileName : releasedFileName
   const activeUpload = incomeTab === "toRelease" ? onUpload : onReleasedUpload
-  const { items, summary:s } = activeData
+  const { items=[], summary:s={} } = activeData || {}
   const totalPrice   = Number(s.originalPrice)||items.reduce((a,i)=>a+i.originalPrice,0)
   const totalRelease = Number(s.totalToRelease)||items.reduce((a,i)=>a+i.toRelease,0)
   const commFee      = Math.abs(Number(s.commissionFee)||0)
@@ -238,6 +238,7 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
       </div>
       </>)}
       {inventoryItems && inventoryItems.length > 0 && items.length > 0 && (() => {
+        console.log("income items[0]:", JSON.stringify(items[0]))
         // SKU→仕入単価マップ
         const costMap = {}
         inventoryItems.forEach(i => { if(i.sku && i.costPhp > 0) costMap[i.sku] = { costPhp: Number(i.costPhp), name: i.name } })
