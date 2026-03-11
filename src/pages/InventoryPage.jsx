@@ -10,7 +10,7 @@ export default function InventoryPage({ uid }) {
   const [fxRate, setFxRate] = useState(0) // 為替レート(¥/₱)
   const [orderMap, setOrderMap] = useState({}) // SKU→出荷数マップ
 
-  useEffect(() => { loadItems(); loadOrderSkus() }, [])
+  useEffect(() => { loadItems(); loadOrderSkus(); loadFxRate(); loadOrderMap() }, [])
 
   async function loadFxRate() {
     try {
@@ -20,18 +20,22 @@ export default function InventoryPage({ uid }) {
       if (!uid) return
       const snap = await getDoc(doc(db, "fx_rates", uid))
       if (snap.exists()) {
-        const rate = Number(snap.data().rate_php_jpy) || 0
-        // rate_php_jpyは「₱1=¥○○」なので、¥→₱換算には使用
+        const data = snap.data()
+        console.log("fx_rates data:", JSON.stringify(data))
+        const rate = Number(data.rate_php_jpy) || 0
+        console.log("fxRate set to:", rate)
         setFxRate(rate)
+      } else {
+        console.log("fx_rates: ドキュメントなし uid=", uid)
       }
     } catch(e) { console.warn("為替レート取得失敗", e) }
   }
 
   async function loadOrderMap() {
     try {
+      const { db, auth } = await import("../lib/firebase")
       const uid = auth.currentUser?.uid
       if (!uid) return
-      const { db } = await import("../lib/firebase")
       const { collection, query, where, getDocs } = await import("firebase/firestore")
       const q = query(collection(db, "shopee_orders"), where("userId","==",uid))
       const snap = await getDocs(q)
@@ -47,6 +51,7 @@ export default function InventoryPage({ uid }) {
           }
         })
       })
+      console.log("orderMap:", JSON.stringify(map))
       setOrderMap(map)
     } catch(e) { console.warn("オーダーマップ取得失敗", e) }
   }
