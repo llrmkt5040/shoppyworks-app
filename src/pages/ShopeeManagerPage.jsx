@@ -167,7 +167,7 @@ function ShippingTab({ orders, onUpload, fileName }) {
   )
 }
 
-function ProfitTab({ incomeData, onUpload, fileName }) {
+function ProfitTab({ incomeData, onUpload, fileName, inventoryItems, fxRate }) {
   const { items, summary:s } = incomeData
   const totalPrice   = Number(s.originalPrice)||items.reduce((a,i)=>a+i.originalPrice,0)
   const totalRelease = Number(s.totalToRelease)||items.reduce((a,i)=>a+i.toRelease,0)
@@ -217,9 +217,72 @@ function ProfitTab({ incomeData, onUpload, fileName }) {
           <span style={{ fontWeight:800, fontSize:18, color:"#16a34a" }}>₱{totalRelease.toLocaleString()}</span>
         </div>
       </div>
-      <div style={{ marginTop:12, background:"#fef9c3", borderRadius:8, padding:"10px 14px", fontSize:12, color:"#92400e" }}>
-        ⚠️ 在庫棚卸メニューで「仕入れ単価」を登録すると商品別粗利が自動計算されます
-      </div>
+      {inventoryItems && inventoryItems.length > 0 && (() => {
+        // SKU→仕入単価マップ
+        const costMap = {}
+        inventoryItems.forEach(i => { if(i.sku && i.costPhp > 0) costMap[i.sku] = { costPhp: Number(i.costPhp), name: i.name } })
+        // MyIncomeからSKU別売上集計
+        const skuSales = {}
+        items.forEach(item => {
+          const sku = item.sku || item["Parent SKU Reference No."] || ""
+          if (!sku) return
+          if (!skuSales[sku]) skuSales[sku] = { revenue: 0, toRelease: 0, qty: 0 }
+          skuSales[sku].revenue += Number(item.originalPrice || 0)
+          skuSales[sku].toRelease += Number(item.toRelease || 0)
+          skuSales[sku].qty += Number(item.qty || 1)
+        })
+        const rows = Object.entries(skuSales).map(([sku, s]) => {
+          const inv = costMap[sku]
+          const costTotal = inv ? inv.costPhp * s.qty : null
+          const grossProfit = costTotal != null ? s.toRelease - costTotal : null
+          const grossMargin = costTotal != null && s.toRelease > 0 ? (grossProfit / s.toRelease * 100).toFixed(1) : null
+          return { sku, name: inv?.name || sku, ...s, costTotal, grossProfit, grossMargin }
+        }).sort((a,b) => (b.toRelease||0) - (a.toRelease||0))
+        if (rows.length === 0) return null
+        return (
+          <div style={{ marginTop:16, background:"var(--surface)", borderRadius:12, padding:16, border:"1px solid var(--rim)" }}>
+            <div style={{ fontWeight:800, fontSize:14, color:"var(--text)", marginBottom:12 }}>📊 SKU別 粗利分析</div>
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                <thead>
+                  <tr style={{ background:"rgba(255,255,255,0.03)" }}>
+                    {["商品名/SKU","数量","売上(₱)","入金(₱)","仕入合計(₱)","粗利(₱)","粗利率"].map(h=>(
+                      <th key={h} style={{ padding:"8px 10px", textAlign:"right", fontWeight:700, color:"var(--dim2)", fontSize:"0.65rem", whiteSpace:"nowrap", borderBottom:"1px solid var(--rim)" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r=>(
+                    <tr key={r.sku} style={{ borderBottom:"1px solid var(--rim)" }}>
+                      <td style={{ padding:"8px 10px", maxWidth:200 }}>
+                        <div style={{ fontWeight:600, color:"var(--text)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.name}</div>
+                        <div style={{ fontSize:"0.65rem", color:"#3b82f6", fontFamily:"monospace" }}>{r.sku}</div>
+                      </td>
+                      <td style={{ padding:"8px 10px", textAlign:"right", color:"var(--dim2)" }}>{r.qty}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"right" }}>₱{r.revenue.toLocaleString()}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"right", color:"#22c55e", fontWeight:700 }}>₱{r.toRelease.toLocaleString()}</td>
+                      <td style={{ padding:"8px 10px", textAlign:"right", color:r.costTotal!=null?"#f59e0b":"var(--dim2)" }}>
+                        {r.costTotal!=null ? `₱${r.costTotal.toLocaleString()}` : <span style={{fontSize:"0.7rem"}}>仕入未登録</span>}
+                      </td>
+                      <td style={{ padding:"8px 10px", textAlign:"right", fontWeight:700, color:r.grossProfit!=null?(r.grossProfit>=0?"#22c55e":"#ef4444"):"var(--dim2)" }}>
+                        {r.grossProfit!=null ? `₱${r.grossProfit.toLocaleString()}` : "—"}
+                      </td>
+                      <td style={{ padding:"8px 10px", textAlign:"right", fontWeight:700, color:r.grossMargin!=null?(Number(r.grossMargin)>=20?"#22c55e":Number(r.grossMargin)>=10?"#f59e0b":"#ef4444"):"var(--dim2)" }}>
+                        {r.grossMargin!=null ? `${r.grossMargin}%` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {Object.keys(costMap).length === 0 && (
+              <div style={{ marginTop:10, background:"#fef9c3", borderRadius:8, padding:"10px 14px", fontSize:12, color:"#92400e" }}>
+                ⚠️ 在庫棚卸メニューで仕入単価(₱)を登録すると粗利が自動計算されます
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -314,6 +377,8 @@ export default function ShopeeManagerPage() {
   const { user } = useAuth()
   const [tab, setTab] = useState("shipping")
   const [orders, setOrders] = useState([])
+  const [inventoryItems, setInventoryItems] = useState([])
+  const [fxRate, setFxRate] = useState(0)
   const [orderFileName, setOrderFileName] = useState("")
   const [incomeData, setIncomeData] = useState({ items:[], summary:{} })
   const [incomeFileName, setIncomeFileName] = useState("")
@@ -335,6 +400,12 @@ export default function ShopeeManagerPage() {
           setIncomeData({ items:latest.items||[], summary:latest.summary||{} }); setIncomeFileName(latest.fileName||"")
         }
         const cfSnap = await getDocs(query(collection(db,"cashflow_items"),where("userId","==",user.uid)))
+        // 在庫棚卸データ取得
+        const invSnap = await getDocs(query(collection(db,"inventory_items"),where("uid","==",user.uid)))
+        setInventoryItems(invSnap.docs.map(d=>({id:d.id,...d.data()})))
+        // 為替レート取得
+        const fxSnap = await getDoc(doc(db,"fx_rates",user.uid))
+        if(fxSnap.exists()) setFxRate(Number(fxSnap.data().rate_php_jpy)||0)
         setCashflowItems(cfSnap.docs.map(d=>({id:d.id,...d.data()})))
       } catch(err) { console.error(err) }
     }
@@ -383,7 +454,7 @@ export default function ShopeeManagerPage() {
         </div>
         <div style={{ padding:20 }}>
           {tab==="shipping"&&<ShippingTab orders={orders} onUpload={handleOrderUpload} fileName={orderFileName} />}
-          {tab==="profit"&&<ProfitTab incomeData={incomeData} onUpload={handleIncomeUpload} fileName={incomeFileName} />}
+          {tab==="profit"&&<ProfitTab incomeData={incomeData} onUpload={handleIncomeUpload} fileName={incomeFileName} inventoryItems={inventoryItems} fxRate={fxRate} />}
           {tab==="cashflow"&&<CashflowTab incomeData={incomeData} cashflowItems={cashflowItems} onAddExpense={handleAddExpense} />}
         </div>
       </div>
