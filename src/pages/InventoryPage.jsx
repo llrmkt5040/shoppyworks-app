@@ -4,7 +4,7 @@ export default function InventoryPage({ uid }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [newItem, setNewItem] = useState({ name:"", qty:"", cost:"", costPhp:"", sku:"", supplier:"", memo:"" })
+  const [newItem, setNewItem] = useState({ name:"", qty:"", cost:"", costPhp:"", sku:"", supplier:"", jan:"", origin:"", memo:"" })
   const [orderSkus, setOrderSkus] = useState([]) // オーダーレポートから取得したSKU一覧
   const [editItem, setEditItem] = useState(null) // 編集中のアイテム
   const [fxRate, setFxRate] = useState(0) // 為替レート(¥/₱)
@@ -150,9 +150,11 @@ export default function InventoryPage({ uid }) {
         costPhp: Number(newItem.costPhp)||0,
         sku: newItem.sku||"",
         supplier: newItem.supplier||"",
+        jan: newItem.jan||"",
+        origin: newItem.origin||"",
         createdAt: new Date().toISOString()
       })
-      setNewItem({ name:"", qty:"", cost:"", costPhp:"", sku:"", supplier:"", memo:"" })
+      setNewItem({ name:"", qty:"", cost:"", costPhp:"", sku:"", supplier:"", jan:"", origin:"", memo:"" })
       setShowForm(false)
       loadItems()
     loadFxRate()
@@ -269,20 +271,28 @@ export default function InventoryPage({ uid }) {
             </div>
           </div>
 
-          {/* 行2: SKU・仕入れ先・メモ */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 2fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
+          {/* 行2: SKU・仕入れ先・JAN・原産国・メモ */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
             <div>
               <label style={labelStyle}>SKU（Order CSV照合用）</label>
-              <input value={newItem.sku} onChange={e=>setNewItem(n=>({...n,sku:e.target.value}))} placeholder="例: DAISO-SUPPLE-01" style={inputStyle} />
+              <input value={newItem.sku} onChange={e=>setNewItem(n=>({...n,sku:e.target.value}))} placeholder="例: Stock-DAISO-001" style={inputStyle} />
             </div>
             <div>
               <label style={labelStyle}>仕入れ先</label>
-              <input value={newItem.supplier} onChange={e=>setNewItem(n=>({...n,supplier:e.target.value}))} placeholder="例: DAISO卸・LS-System" style={inputStyle} />
+              <input value={newItem.supplier} onChange={e=>setNewItem(n=>({...n,supplier:e.target.value}))} placeholder="例: DAISO卸" style={inputStyle} />
             </div>
             <div>
-              <label style={labelStyle}>メモ</label>
-              <input value={newItem.memo} onChange={e=>setNewItem(n=>({...n,memo:e.target.value}))} placeholder="商品URL、備考など" style={inputStyle} />
+              <label style={labelStyle}>JANコード</label>
+              <input value={newItem.jan} onChange={e=>setNewItem(n=>({...n,jan:e.target.value}))} placeholder="例: 4549131234567" style={inputStyle} />
             </div>
+            <div>
+              <label style={labelStyle}>原産国</label>
+              <input value={newItem.origin} onChange={e=>setNewItem(n=>({...n,origin:e.target.value}))} placeholder="例: 日本" style={inputStyle} />
+            </div>
+          </div>
+          <div style={{marginBottom:"0.75rem"}}>
+            <label style={labelStyle}>メモ</label>
+            <input value={newItem.memo} onChange={e=>setNewItem(n=>({...n,memo:e.target.value}))} placeholder="商品URL、備考など" style={inputStyle} />
           </div>
 
           <div style={{display:"flex",gap:"0.5rem"}}>
@@ -397,8 +407,8 @@ export default function InventoryPage({ uid }) {
                 </div>
               ))}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 2fr",gap:"0.75rem",marginBottom:"1rem"}}>
-              {[{key:"sku",label:"SKU",type:"text"},{key:"supplier",label:"仕入れ先",type:"text"},{key:"memo",label:"メモ",type:"text"}].map(f=>(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 2fr",gap:"0.75rem",marginBottom:"1rem"}}>
+              {[{key:"sku",label:"SKU",type:"text"},{key:"supplier",label:"仕入れ先",type:"text"},{key:"jan",label:"JANコード",type:"text"},{key:"origin",label:"原産国",type:"text"},{key:"memo",label:"メモ",type:"text"}].map(f=>(
                 <div key={f.key}>
                   <label style={{fontSize:"0.65rem",fontWeight:700,color:"var(--dim2)",display:"block",marginBottom:"0.25rem"}}>{f.label}</label>
                   <input type={f.type} value={editItem[f.key]||""} onChange={e=>setEditItem(n=>({...n,[f.key]:e.target.value}))}
@@ -425,6 +435,8 @@ export default function InventoryPage({ uid }) {
               <tr style={{background:"rgba(255,255,255,0.03)",borderBottom:"1px solid var(--rim)"}}>
                 <th style={{padding:"0.75rem 1rem",textAlign:"left",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>商品名</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"left",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>SKU / 仕入先</th>
+                <th style={{padding:"0.75rem 1rem",textAlign:"left",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>JAN / 原産国</th>
+                <th style={{padding:"0.75rem 1rem",textAlign:"left",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>JAN / 原産国</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>数量</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>単価(¥)</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"#22c55e",fontSize:"0.65rem",textTransform:"uppercase"}}>仕入(₱)</th>
@@ -442,6 +454,14 @@ export default function InventoryPage({ uid }) {
                   <td style={{padding:"0.75rem 1rem"}}>
                     {item.sku && <div style={{fontSize:"0.72rem",fontFamily:"monospace",color:"#3b82f6",fontWeight:600}}>{item.sku}</div>}
                     {item.supplier && <div style={{fontSize:"0.68rem",color:"var(--dim2)",marginTop:"0.1rem"}}>🏭 {item.supplier}</div>}
+                  </td>
+                  <td style={{padding:"0.75rem 1rem"}}>
+                    {item.jan && <div style={{fontSize:"0.72rem",fontFamily:"monospace",color:"var(--dim2)"}}>{item.jan}</div>}
+                    {item.origin && <div style={{fontSize:"0.68rem",color:"var(--dim2)",marginTop:"0.1rem"}}>🌏 {item.origin}</div>}
+                  </td>
+                  <td style={{padding:"0.75rem 1rem"}}>
+                    {item.jan && <div style={{fontSize:"0.72rem",fontFamily:"monospace",color:"var(--dim2)"}}>{item.jan}</div>}
+                    {item.origin && <div style={{fontSize:"0.68rem",color:"var(--dim2)",marginTop:"0.1rem"}}>🌏 {item.origin}</div>}
                   </td>
                   <td style={{padding:"0.75rem 1rem",textAlign:"right"}}>{Number(item.qty).toLocaleString()}</td>
                   <td style={{padding:"0.75rem 1rem",textAlign:"right"}}>¥{Number(item.cost).toLocaleString()}</td>
