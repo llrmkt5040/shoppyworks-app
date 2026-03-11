@@ -43,10 +43,10 @@ export default function InventoryPage({ uid }) {
       snap.docs.forEach(d => {
         const orders = d.data().orders || []
         orders.forEach(o => {
-          const sku = o["Parent SKU Reference No."] || o["sku"] || ""
-          const status = o["Order Status"] || ""
-          const qty = Number(o["Quantity"] || 1)
-          if (sku && (status === "Shipped" || status === "Delivered" || status === "Completed" || status === "Shipping")) {
+          const sku = o["sku"] || o["Parent SKU Reference No."] || ""
+          const status = o["status"] || o["Order Status"] || ""
+          const qty = Number(o["qty"] || o["Quantity"] || 1)
+          if (sku && (status === "Shipped" || status === "Delivered" || status === "Completed" || status === "Shipping" || status === "shipped" || status === "delivered")) {
             map[sku] = (map[sku] || 0) + qty
           }
         })
