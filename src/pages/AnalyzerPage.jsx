@@ -406,7 +406,21 @@ export default function AnalyzerPage({ onNavigate }) {
                   {filteredProducts.map((p, i) => (
                     <tr key={i} style={{ borderBottom:'1px solid var(--rim)', transition:'background 0.1s' }} onMouseEnter={e => e.currentTarget.style.background='rgba(255,107,43,0.04)'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                       <td style={{ padding:'0.55rem 0.5rem', color:'var(--dim)', fontSize:'0.7rem', fontFamily:"'DM Mono',monospace" }}>{i+1}</td>
-                      <td style={{ padding:'0.55rem 0.5rem', maxWidth:280 }}><div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:'0.78rem', fontWeight:600 }} title={p.name}>{p.name}</div></td>
+                      <td style={{ padding:'0.55rem 0.5rem', maxWidth:300 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:'0.35rem' }}>
+                          <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:'0.78rem', fontWeight:600, flex:1 }} title={p.name}>{p.name}</div>
+                          {productFlags[p.name] && (
+                            <span style={{ fontSize:'0.8rem', flexShrink:0 }}>{FLAGS[productFlags[p.name]]?.emoji}</span>
+                          )}
+                          <div style={{ display:'flex', gap:'0.15rem', flexShrink:0 }}>
+                            {Object.entries(FLAGS).map(([k,f]) => (
+                              <button key={k} onClick={() => setFlag(p.name, k)} title={f.label} style={{ width:20, height:20, borderRadius:4, border:'1px solid', borderColor:productFlags[p.name]===k?f.color:'transparent', background:productFlags[p.name]===k?f.color+'33':'rgba(255,255,255,0.05)', cursor:'pointer', fontSize:'0.65rem', display:'flex', alignItems:'center', justifyContent:'center', padding:0, transition:'all 0.15s' }}>
+                                {f.emoji}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
                       <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', color:'var(--orange)', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem' }}>₱{(p.sales||0).toLocaleString('en',{maximumFractionDigits:0})}</td>
                       <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:'var(--dim2)' }}>{(p.impressions||0).toLocaleString()}</td>
                       <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:'var(--dim2)' }}>{(p.orders||0).toLocaleString()}</td>
