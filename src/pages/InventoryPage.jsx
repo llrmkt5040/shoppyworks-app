@@ -6,6 +6,7 @@ export default function InventoryPage({ uid }) {
   const [showForm, setShowForm] = useState(false)
   const [newItem, setNewItem] = useState({ name:"", qty:"", cost:"", costPhp:"", sku:"", supplier:"", memo:"" })
   const [orderSkus, setOrderSkus] = useState([]) // オーダーレポートから取得したSKU一覧
+  const [editItem, setEditItem] = useState(null) // 編集中のアイテム
 
   useEffect(() => { loadItems(); loadOrderSkus() }, [])
 
@@ -58,6 +59,25 @@ export default function InventoryPage({ uid }) {
       setShowForm(false)
       loadItems()
     } catch(e) { alert("追加エラー: " + e.message) }
+  }
+
+  async function updateItem() {
+    if (!editItem || !editItem.name) return
+    try {
+      const { db } = await import("../lib/firebase")
+      const { doc, updateDoc } = await import("firebase/firestore")
+      await updateDoc(doc(db,"inventory_items",editItem.id), {
+        name: editItem.name,
+        qty: Number(editItem.qty)||0,
+        cost: Number(editItem.cost)||0,
+        costPhp: Number(editItem.costPhp)||0,
+        sku: editItem.sku||"",
+        supplier: editItem.supplier||"",
+        memo: editItem.memo||"",
+      })
+      setEditItem(null)
+      loadItems()
+    } catch(e) { alert("更新エラー: " + e.message) }
   }
 
   async function deleteItem(id) {
@@ -166,6 +186,37 @@ export default function InventoryPage({ uid }) {
       )}
 
       {/* テーブル */}
+      {/* 編集モーダル */}
+      {editItem && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}>
+          <div style={{background:"var(--surface)",borderRadius:14,padding:"1.5rem",width:"90%",maxWidth:560,border:"1px solid var(--rim)"}}>
+            <div style={{fontWeight:800,fontSize:"1rem",marginBottom:"1rem",color:"var(--text)"}}>✏️ 商品を編集</div>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
+              {[{key:"name",label:"商品名",type:"text"},{key:"qty",label:"数量",type:"number"},{key:"cost",label:"単価(¥)",type:"number"},{key:"costPhp",label:"仕入(₱)",type:"number"}].map(f=>(
+                <div key={f.key}>
+                  <label style={{fontSize:"0.65rem",fontWeight:700,color:"var(--dim2)",display:"block",marginBottom:"0.25rem"}}>{f.label}</label>
+                  <input type={f.type} value={editItem[f.key]||""} onChange={e=>setEditItem(n=>({...n,[f.key]:e.target.value}))}
+                    style={{width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--bg)",color:"var(--text)",fontSize:"0.85rem",boxSizing:"border-box"}} />
+                </div>
+              ))}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 2fr",gap:"0.75rem",marginBottom:"1rem"}}>
+              {[{key:"sku",label:"SKU",type:"text"},{key:"supplier",label:"仕入れ先",type:"text"},{key:"memo",label:"メモ",type:"text"}].map(f=>(
+                <div key={f.key}>
+                  <label style={{fontSize:"0.65rem",fontWeight:700,color:"var(--dim2)",display:"block",marginBottom:"0.25rem"}}>{f.label}</label>
+                  <input type={f.type} value={editItem[f.key]||""} onChange={e=>setEditItem(n=>({...n,[f.key]:e.target.value}))}
+                    style={{width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--bg)",color:"var(--text)",fontSize:"0.85rem",boxSizing:"border-box"}} />
+                </div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:"0.5rem"}}>
+              <button onClick={updateItem} style={{padding:"0.5rem 1.5rem",borderRadius:8,border:"none",background:"var(--orange)",color:"#fff",fontSize:"0.8rem",fontWeight:700,cursor:"pointer"}}>💾 保存</button>
+              <button onClick={()=>setEditItem(null)} style={{padding:"0.5rem 1rem",borderRadius:8,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",fontSize:"0.8rem",cursor:"pointer"}}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="card" style={{padding:"2rem",textAlign:"center",color:"var(--dim2)"}}>読み込み中...</div>
       ) : items.length === 0 ? (
@@ -202,7 +253,10 @@ export default function InventoryPage({ uid }) {
                   </td>
                   <td style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--orange)"}}>¥{(Number(item.qty)*Number(item.cost)).toLocaleString()}</td>
                   <td style={{padding:"0.75rem 1rem",textAlign:"center"}}>
-                    <button onClick={()=>deleteItem(item.id)} style={{padding:"0.2rem 0.6rem",borderRadius:6,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.1)",color:"#ef4444",fontSize:"0.7rem",cursor:"pointer"}}>削除</button>
+                    <div style={{display:"flex",gap:4,justifyContent:"center"}}>
+                      <button onClick={()=>setEditItem({...item})} style={{padding:"0.2rem 0.6rem",borderRadius:6,border:"1px solid rgba(59,130,246,0.3)",background:"rgba(59,130,246,0.1)",color:"#3b82f6",fontSize:"0.7rem",cursor:"pointer"}}>編集</button>
+                      <button onClick={()=>deleteItem(item.id)} style={{padding:"0.2rem 0.6rem",borderRadius:6,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.1)",color:"#ef4444",fontSize:"0.7rem",cursor:"pointer"}}>削除</button>
+                    </div>
                   </td>
                 </tr>
               ))}
