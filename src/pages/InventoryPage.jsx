@@ -9,6 +9,14 @@ export default function InventoryPage({ uid }) {
   const [editItem, setEditItem] = useState(null) // 編集中のアイテム
   const [fxRate, setFxRate] = useState(0) // 為替レート(¥/₱)
   const [orderMap, setOrderMap] = useState({}) // SKU→出荷数マップ
+  const [skuOptions, setSkuOptions] = useState([]) // オーダーSKU一覧（一括登録用）
+  const [showBulkForm, setShowBulkForm] = useState(false)
+  const [bulkSelected, setBulkSelected] = useState({})
+  const [bulkCost, setBulkCost] = useState({})
+  const [bulkCostPhp, setBulkCostPhp] = useState({})
+  const [bulkQty, setBulkQty] = useState({})
+  const [bulkSupplier, setBulkSupplier] = useState("")
+  const [bulkSaving, setBulkSaving] = useState(false)
 
   useEffect(() => { if(uid){ loadItems(); loadOrderSkus(); loadFxRate(); loadOrderMap(); loadSkuOptions() } }, [uid])
 
