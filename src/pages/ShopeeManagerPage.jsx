@@ -405,6 +405,8 @@ export default function ShopeeManagerPage() {
   const [incomeFileName, setIncomeFileName] = useState("")
   const [cashflowItems, setCashflowItems] = useState([])
   const [saving, setSaving] = useState(false)
+  const [releasedData, setReleasedData] = useState({ items:[], summary:{} })
+  const [releasedFileName, setReleasedFileName] = useState("")
 
   useEffect(() => {
     if (!user) return
@@ -438,6 +440,17 @@ export default function ShopeeManagerPage() {
     if (!user) return; setSaving(true)
     try { await addDoc(collection(db,"shopee_orders"),{ userId:user.uid, fileName, orders:parsed.slice(0,500), uploadedAt:serverTimestamp() }) }
     catch(err) { console.error(err) } finally { setSaving(false) }
+  }
+
+  const handleReleasedUpload = async (wb, fileName) => {
+    const parsed = parseIncomeXlsx(wb)
+    setReleasedData(parsed)
+    setReleasedFileName(fileName)
+    if (!user) return
+    setSaving(true)
+    try {
+      await addDoc(collection(db,"shopee_income_released"),{ userId:user.uid, fileName, items:parsed.items.slice(0,300), summary:parsed.summary, uploadedAt:serverTimestamp() })
+    } catch(err) { console.error(err) } finally { setSaving(false) }
   }
 
   const handleIncomeUpload = async (wb, fileName) => {
@@ -475,7 +488,7 @@ export default function ShopeeManagerPage() {
         </div>
         <div style={{ padding:20 }}>
           {tab==="shipping"&&<ShippingTab orders={orders} onUpload={handleOrderUpload} fileName={orderFileName} />}
-          {tab==="profit"&&<ProfitTab incomeData={incomeData} onUpload={handleIncomeUpload} fileName={incomeFileName} inventoryItems={inventoryItems} fxRate={fxRate} />}
+          {tab==="profit"&&<ProfitTab incomeData={incomeData} onUpload={handleIncomeUpload} fileName={incomeFileName} releasedData={releasedData} onReleasedUpload={handleReleasedUpload} releasedFileName={releasedFileName} inventoryItems={inventoryItems} fxRate={fxRate} />}
           {tab==="cashflow"&&<CashflowTab incomeData={incomeData} cashflowItems={cashflowItems} onAddExpense={handleAddExpense} />}
         </div>
       </div>
