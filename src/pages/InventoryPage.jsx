@@ -198,7 +198,7 @@ export default function InventoryPage({ uid }) {
             </div>
             <div>
               <label style={{...labelStyle,color:"#22c55e"}}>仕入単価 (₱) ← 粗利計算用</label>
-              <input type="number" value={newItem.costPhp} onChange={e=>setNewItem(n=>({...n,costPhp:e.target.value}))} placeholder="0" style={inputStyle} />
+              <input type="number" value={newItem.costPhp} onChange={e=>setNewItem(n=>({...n,costPhp:e.target.value}))} placeholder={fxRate>0?"¥入力で自動計算":"手動入力"} style={inputStyle} />
             </div>
           </div>
 
