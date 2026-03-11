@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
-import { auth } from "../lib/firebase"
+import { auth, db } from "../lib/firebase"
 import { onAuthStateChanged, signOut } from "firebase/auth"
+import { collection, getDocs, doc, getDoc } from "firebase/firestore"
 import DashboardPage from "../pages/DashboardPage"
 import AnalyzerPage from "../pages/AnalyzerPage"
 import ActionLogPage from "../pages/ActionLogPage"
@@ -25,33 +26,71 @@ export default function AppLayout() {
   const [page, setPage] = useState("analyzer")
   const [sideOpen, setSideOpen] = useState(true)
   const [userMenu, setUserMenu] = useState(false)
+  const [staffTarget, setStaffTarget] = useState(null) // スタッフがアクセス中のユーザー情報
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
       setUser(u)
       if (u) {
         try {
-          const { db } = await import("../lib/firebase")
-          const { doc, getDoc } = await import("firebase/firestore")
           const snap = await getDoc(doc(db, "users", u.uid))
           if (snap.exists()) setProfile(snap.data())
           else setProfile({ uid: u.uid, name: u.displayName, email: u.email })
         } catch {
           setProfile({ uid: u.uid, name: u.displayName, email: u.email })
         }
+        // スタッフアクセスチェック: 自分のメールが他ユーザーのstaff_emailsに含まれているか確認
+        try {
+          const allSettings = await getDocs(collection(db, "user_settings"))
+          for (const docSnap of allSettings.docs) {
+            const data = docSnap.data()
+            const emails = (data.staff_emails || []).map(e => e.toLowerCase())
+            if (emails.includes(u.email?.toLowerCase())) {
+              const targetUid = docSnap.id
+              if (targetUid !== u.uid) {
+                // usersコレクションからターゲットのプロフィール取得
+                const targetSnap = await getDoc(doc(db, "users", targetUid))
+                const targetData = targetSnap.exists() ? targetSnap.data() : {}
+                // allowed_emailsからも名前を取得試みる
+                const allowSnap = await getDoc(doc(db, "allowed_emails", targetData.email || ""))
+                const allowData = allowSnap.exists() ? allowSnap.data() : {}
+                const target = {
+                  uid: targetUid,
+                  name: targetData.name || allowData.name || targetData.email || targetUid,
+                  email: targetData.email || ""
+                }
+                console.log("✅ スタッフターゲット検出:", target)
+                setStaffTarget(target)
+                break
+              }
+            }
+          }
+        } catch(e) { console.error("staff check error:", e) }
+      } else {
+        setStaffTarget(null)
       }
     })
   }, [])
 
+  const isStaff = !!staffTarget
+
   function renderPage() {
-    const uid = profile?.uid || user?.uid
+    const uid = staffTarget ? staffTarget.uid : (profile?.uid || user?.uid)
+    // スタッフは設定ページにアクセス不可
+    if (isStaff && page === "settings") return (
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:"1rem"}}>
+        <div style={{fontSize:"2rem"}}>🔒</div>
+        <div style={{fontSize:"1rem",fontWeight:700,color:"var(--text)"}}>設定ページはアクセスできません</div>
+        <div style={{fontSize:"0.8rem",color:"var(--dim2)"}}>スタッフはオーナーの設定を変更できません</div>
+      </div>
+    )
     switch (page) {
       case "dashboard": return <DashboardPage uid={uid} />
       case "analyzer":  return <AnalyzerPage uid={uid} onNavigate={setPage} />
       case "actionlog": return <ActionLogPage uid={uid} />
       case "inventory": return <InventoryPage uid={uid} />
       case "requests":  return <RequestsPage uid={uid} />
-      case "shopee":    return <ShopeeManagerPage />
+      case "shopee":    return <ShopeeManagerPage uid={uid} />
       case "settings":  return <SettingsPage uid={uid} profile={profile} />
       default:          return <DashboardPage uid={uid} />
     }
@@ -109,6 +148,14 @@ export default function AppLayout() {
         )}
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {staffTarget && (
+          <div style={{ background: "linear-gradient(90deg,#7c3aed,#a855f7)", color: "#fff", padding: "0.35rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+            <span>👥 スタッフアクセス中：</span>
+            <span style={{ fontWeight: 900 }}>{staffTarget.name}</span>
+            <span style={{ opacity: 0.8 }}>({staffTarget.email}) のデータを表示しています</span>
+            <button onClick={() => setStaffTarget(null)} style={{ marginLeft: "auto", background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 6, padding: "0.15rem 0.5rem", fontSize: "0.65rem", cursor: "pointer", fontWeight: 700 }}>自分のデータに戻る</button>
+          </div>
+        )}
         <div style={{ height: 52, borderBottom: "1px solid var(--rim)", display: "flex", alignItems: "center", gap: "0.75rem", padding: "0 1.25rem", background: "var(--surface)", flexShrink: 0 }}>
           <button onClick={() => setSideOpen(o => !o)} style={{ width: 32, height: 32, borderRadius: 6, border: "1px solid var(--rim)", background: "transparent", color: "var(--dim2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.9rem" }}>{sideOpen ? "◀" : "▶"}</button>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>

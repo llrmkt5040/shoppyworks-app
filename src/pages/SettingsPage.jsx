@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { db, auth } from "../lib/firebase"
-import { doc, getDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, query, where } from "firebase/firestore"
 
 const FIELD_GROUPS = [
   {
@@ -117,8 +117,11 @@ export default function SettingsPage() {
   const [visible, setVisible] = useState(DEFAULT_VISIBLE)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [staffEmails, setStaffEmails] = useState([])
+  const [newStaffEmail, setNewStaffEmail] = useState("")
+  const [staffSaving, setStaffSaving] = useState(false)
 
-  useEffect(() => { loadSettings() }, [])
+  useEffect(() => { loadSettings(); loadStaffEmails() }, [])
 
   async function loadSettings() {
     try {
@@ -127,6 +130,38 @@ export default function SettingsPage() {
         setVisible(v => ({ ...DEFAULT_VISIBLE, ...snap.data().field_visibility }))
       }
     } catch(e) { console.error(e) }
+  }
+
+  async function loadStaffEmails() {
+    try {
+      const snap = await getDoc(doc(db, "user_settings", auth.currentUser?.uid))
+      if (snap.exists() && snap.data().staff_emails) {
+        setStaffEmails(snap.data().staff_emails)
+      }
+    } catch(e) { console.error(e) }
+  }
+
+  async function addStaff() {
+    const email = newStaffEmail.trim().toLowerCase()
+    if (!email || !email.includes("@")) return alert("正しいメールアドレスを入力してください")
+    if (staffEmails.includes(email)) return alert("すでに登録されています")
+    setStaffSaving(true)
+    try {
+      const updated = [...staffEmails, email]
+      await setDoc(doc(db, "user_settings", auth.currentUser?.uid), { staff_emails: updated }, { merge: true })
+      setStaffEmails(updated)
+      setNewStaffEmail("")
+    } catch(e) { alert("エラー: " + e.message) }
+    setStaffSaving(false)
+  }
+
+  async function removeStaff(email) {
+    if (!confirm(email + " を削除しますか？")) return
+    try {
+      const updated = staffEmails.filter(e => e !== email)
+      await setDoc(doc(db, "user_settings", auth.currentUser?.uid), { staff_emails: updated }, { merge: true })
+      setStaffEmails(updated)
+    } catch(e) { alert("エラー: " + e.message) }
   }
 
   async function saveSettings() {
@@ -190,6 +225,43 @@ export default function SettingsPage() {
         style={{width:"100%",padding:"0.9rem",borderRadius:10,border:"none",background:saved?"var(--green)":"var(--orange)",color:"#fff",fontSize:"1rem",fontWeight:900,cursor:saving?"not-allowed":"pointer",transition:"all 0.3s",marginTop:"0.5rem"}}>
         {saving ? "保存中.." : saved ? "✅ 保存しました！" : "設定を保存する"}
       </button>
+
+      {/* スタッフアクセス管理 */}
+      <div className="card" style={{padding:"1.25rem",marginTop:"2rem"}}>
+        <div style={{marginBottom:"1rem",paddingBottom:"0.75rem",borderBottom:"1px solid var(--rim)"}}>
+          <span style={{fontSize:"0.72rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase",letterSpacing:"0.08em"}}>👥 スタッフアクセス管理</span>
+          <p style={{fontSize:"0.75rem",color:"var(--dim2)",marginTop:"0.3rem"}}>このアカウントにアクセスを許可するスタッフのGoogleメールを登録します</p>
+        </div>
+        <div style={{display:"flex",gap:"0.5rem",marginBottom:"1rem"}}>
+          <input
+            type="email"
+            placeholder="staff@gmail.com"
+            value={newStaffEmail}
+            onChange={e => setNewStaffEmail(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addStaff()}
+            style={{flex:1,padding:"0.55rem 0.75rem",borderRadius:8,border:"1px solid var(--rim2)",background:"var(--bg)",color:"var(--text)",fontSize:"0.82rem",outline:"none"}}
+          />
+          <button onClick={addStaff} disabled={staffSaving}
+            style={{padding:"0.55rem 1rem",borderRadius:8,border:"none",background:"var(--orange)",color:"#fff",fontSize:"0.78rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+            ＋追加
+          </button>
+        </div>
+        {staffEmails.length === 0 ? (
+          <p style={{fontSize:"0.75rem",color:"var(--dim2)",textAlign:"center",padding:"0.75rem"}}>スタッフは登録されていません</p>
+        ) : (
+          <div style={{display:"flex",flexDirection:"column",gap:"0.4rem"}}>
+            {staffEmails.map(email => (
+              <div key={email} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0.5rem 0.75rem",borderRadius:8,background:"rgba(255,107,43,0.05)",border:"1px solid var(--rim)"}}>
+                <span style={{fontSize:"0.82rem",color:"var(--text)"}}>{email}</span>
+                <button onClick={() => removeStaff(email)}
+                  style={{padding:"0.2rem 0.5rem",borderRadius:6,border:"none",background:"rgba(239,68,68,0.15)",color:"#ef4444",fontSize:"0.7rem",cursor:"pointer",fontWeight:700}}>
+                  削除
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

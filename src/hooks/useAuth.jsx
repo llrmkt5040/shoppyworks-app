@@ -17,11 +17,29 @@ export function AuthProvider({ children }) {
       try {
         const allowRef  = doc(db, 'allowed_emails', fbUser.email)
         const allowSnap = await getDoc(allowRef)
+
+        // allowed_emailsにない場合、staff_emailsに登録されているか確認
         if (!allowSnap.exists()) {
-          await fbSignOut(auth)
-          setError('このアカウントはBootcampに登録されていません。')
+          const { collection, getDocs } = await import('firebase/firestore')
+          const allSettings = await getDocs(collection(db, 'user_settings'))
+          let isStaff = false
+          for (const docSnap of allSettings.docs) {
+            const emails = (docSnap.data().staff_emails || []).map(e => e.toLowerCase())
+            if (emails.includes(fbUser.email?.toLowerCase())) {
+              isStaff = true; break
+            }
+          }
+          if (!isStaff) {
+            await fbSignOut(auth)
+            setError('このアカウントはBootcampに登録されていません。')
+            setLoading(false); return
+          }
+          // スタッフとしてログイン許可（usersドキュメントがなくてもOK）
+          const profileData = { uid: fbUser.uid, email: fbUser.email, name: fbUser.displayName || '', role: 'staff', createdAt: new Date().toISOString() }
+          setUser(fbUser); setProfile(profileData); setError(null)
           setLoading(false); return
         }
+
         const userRef  = doc(db, 'users', fbUser.uid)
         const userSnap = await getDoc(userRef)
         let profileData
