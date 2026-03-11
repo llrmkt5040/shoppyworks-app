@@ -438,7 +438,6 @@ export default function InventoryPage({ uid }) {
                 <th style={{padding:"0.75rem 1rem",textAlign:"left",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>商品名</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"left",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>SKU / 仕入先</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"left",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>JAN / 原産国</th>
-                <th style={{padding:"0.75rem 1rem",textAlign:"left",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>JAN / 原産国</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>数量</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>単価(¥)</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"#22c55e",fontSize:"0.65rem",textTransform:"uppercase"}}>仕入(₱)</th>
@@ -456,10 +455,6 @@ export default function InventoryPage({ uid }) {
                   <td style={{padding:"0.75rem 1rem"}}>
                     {item.sku && <div style={{fontSize:"0.72rem",fontFamily:"monospace",color:"#3b82f6",fontWeight:600}}>{item.sku}</div>}
                     {item.supplier && <div style={{fontSize:"0.68rem",color:"var(--dim2)",marginTop:"0.1rem"}}>🏭 {item.supplier}</div>}
-                  </td>
-                  <td style={{padding:"0.75rem 1rem"}}>
-                    {item.jan && <div style={{fontSize:"0.72rem",fontFamily:"monospace",color:"var(--dim2)"}}>{item.jan}</div>}
-                    {item.origin && <div style={{fontSize:"0.68rem",color:"var(--dim2)",marginTop:"0.1rem"}}>🌏 {item.origin}</div>}
                   </td>
                   <td style={{padding:"0.75rem 1rem"}}>
                     {item.jan && <div style={{fontSize:"0.72rem",fontFamily:"monospace",color:"var(--dim2)"}}>{item.jan}</div>}
