@@ -148,6 +148,7 @@ export default function DashboardPage() {
     { id:'weekly',    label:'📆 週次' },
     { id:'monthly',   label:'📊 月次' },
     { id:'roadmap',   label:'🎯 ロードマップ' },
+    { id:'goals',     label:'🏆 目標管理' },
   ]
 
   function DiffBadge({ value, reverse = false, fmt }) {
@@ -410,9 +411,164 @@ export default function DashboardPage() {
               </div>
             )}
 
+            {/* 目標管理タブ */}
+            {tab === 'goals' && (
+              <GoalsTab uid={auth.currentUser?.uid} latest={latest} />
+            )}
+
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function GoalsTab({ uid, latest }) {
+  const GOAL_PERIODS = [
+    { id:'3years',  label:'🚀 3年後（2029年）',        desc:'長期ビジョン' },
+    { id:'dec2026', label:'🎄 2026年12月',             desc:'年末目標' },
+    { id:'aug2026', label:'☀️ 2026年8月（繁忙期直前）', desc:'繁忙期準備' },
+    { id:'thismonth', label:'📅 今月の目標',            desc:new Date().getFullYear()+'年'+(new Date().getMonth()+1)+'月' },
+  ]
+  const GOAL_KEYS = [
+    { key:'sales',   label:'月間売上',   unit:'₱', color:'var(--orange)', placeholder:'例: 50000' },
+    { key:'orders',  label:'月間受注数', unit:'件', color:'var(--purple)', placeholder:'例: 100' },
+    { key:'ctr',     label:'CTR目標',   unit:'%',  color:'#2563eb',       placeholder:'例: 5.0' },
+    { key:'cvr',     label:'CVR目標',   unit:'%',  color:'#16a34a',       placeholder:'例: 8.0' },
+    { key:'gross',   label:'粗利',      unit:'₱', color:'#10b981',       placeholder:'例: 20000' },
+    { key:'profit',  label:'営業利益',  unit:'₱', color:'#06b6d4',       placeholder:'例: 15000' },
+  ]
+  const [goals, setGoals] = useState({})
+  const [editing, setEditing] = useState('thismonth')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => { if (uid) loadGoals() }, [uid])
+
+  async function loadGoals() {
+    try {
+      const { db } = await import('../lib/firebase')
+      const { doc, getDoc } = await import('firebase/firestore')
+      const snap = await getDoc(doc(db, 'user_goals', uid))
+      if (snap.exists()) setGoals(snap.data())
+    } catch(e) { console.error(e) }
+  }
+
+  async function saveGoals() {
+    setSaving(true)
+    try {
+      const { db } = await import('../lib/firebase')
+      const { doc, setDoc } = await import('firebase/firestore')
+      await setDoc(doc(db, 'user_goals', uid), { ...goals, updatedAt: new Date().toISOString() })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch(e) { alert('保存エラー: '+e.message) }
+    setSaving(false)
+  }
+
+  function setGoalVal(period, key, val) {
+    setGoals(prev => ({ ...prev, [period]: { ...(prev[period]||{}), [key]: val } }))
+  }
+
+  function getActual(key) {
+    if (!latest) return null
+    const map = { sales: latest.kpis?.totalSales, orders: latest.kpis?.totalOrders, ctr: latest.kpis?.avgCtr, cvr: latest.kpis?.avgCvr }
+    return map[key] ?? null
+  }
+
+  function getRate(actual, target) {
+    if (!actual || !target || parseFloat(target) === 0) return null
+    return Math.min(Math.round((actual / parseFloat(target)) * 100), 999)
+  }
+
+  const activePeriod = GOAL_PERIODS.find(p => p.id === editing)
+
+  return (
+    <div className="fade-up">
+      {/* 期間タブ */}
+      <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap', marginBottom:'1.5rem' }}>
+        {GOAL_PERIODS.map(p => (
+          <button key={p.id} onClick={() => setEditing(p.id)} style={{ padding:'0.5rem 1rem', borderRadius:10, border:'1px solid', borderColor:editing===p.id?'var(--orange)':'var(--rim)', background:editing===p.id?'rgba(255,107,43,0.1)':'transparent', color:editing===p.id?'var(--orange)':'var(--dim2)', cursor:'pointer', fontSize:'0.78rem', fontWeight:editing===p.id?800:600, transition:'all 0.15s' }}>
+            {p.label}
+            <div style={{ fontSize:'0.6rem', color:'var(--dim2)', fontWeight:400 }}>{p.desc}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* 目標入力 */}
+      <div className="card" style={{ padding:'1.5rem', marginBottom:'1rem' }}>
+        <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--orange)', marginBottom:'1.25rem', textTransform:'uppercase', letterSpacing:'0.1em' }}>
+          {activePeriod?.label} の目標設定
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:'1rem' }}>
+          {GOAL_KEYS.map(g => {
+            const val = goals[editing]?.[g.key] || ''
+            const actual = editing === 'thismonth' ? getActual(g.key) : null
+            const rate = editing === 'thismonth' ? getRate(actual, val) : null
+            return (
+              <div key={g.key} style={{ padding:'0.75rem', background:'rgba(255,255,255,0.02)', borderRadius:10, border:'1px solid var(--rim)' }}>
+                <div style={{ fontSize:'0.65rem', fontWeight:700, color:'var(--dim2)', marginBottom:'0.4rem', textTransform:'uppercase' }}>{g.label}</div>
+                <div style={{ display:'flex', alignItems:'center', gap:'0.35rem', marginBottom:'0.5rem' }}>
+                  <span style={{ fontSize:'0.75rem', color:g.color }}>{g.unit}</span>
+                  <input
+                    type="number"
+                    value={val}
+                    onChange={e => setGoalVal(editing, g.key, e.target.value)}
+                    placeholder={g.placeholder}
+                    style={{ flex:1, background:'transparent', border:'none', borderBottom:'1px solid var(--rim2)', color:'var(--text)', fontSize:'0.95rem', fontWeight:700, fontFamily:"'DM Mono',monospace", outline:'none', padding:'0.1rem 0' }}
+                  />
+                </div>
+                {editing === 'thismonth' && actual !== null && (
+                  <div style={{ marginTop:'0.35rem' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.62rem', color:'var(--dim2)', marginBottom:'0.2rem' }}>
+                      <span>現在: {g.unit==='₱'?'₱'+Math.round(actual).toLocaleString():actual?.toFixed(2)+g.unit}</span>
+                      {rate !== null && <span style={{ color:rate>=100?'var(--green)':rate>=70?'var(--yellow)':'var(--red)', fontWeight:700 }}>{rate}%</span>}
+                    </div>
+                    {val && <div style={{ height:4, borderRadius:2, background:'var(--rim)', overflow:'hidden' }}>
+                      <div style={{ height:'100%', width:Math.min(rate||0,100)+'%', background:rate>=100?'var(--green)':rate>=70?'var(--yellow)':'var(--red)', borderRadius:2, transition:'width 0.5s' }} />
+                    </div>}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ marginTop:'1.25rem', display:'flex', gap:'0.75rem', alignItems:'center' }}>
+          <button onClick={saveGoals} disabled={saving} style={{ padding:'0.55rem 1.75rem', borderRadius:10, border:'none', background:'var(--orange)', color:'#fff', fontWeight:700, cursor:saving?'not-allowed':'pointer', fontSize:'0.82rem' }}>
+            {saving ? '保存中...' : '💾 保存する'}
+          </button>
+          {saved && <span style={{ fontSize:'0.78rem', color:'var(--green)', fontWeight:700 }}>✅ 保存しました！</span>}
+        </div>
+      </div>
+
+      {/* 今月の達成状況サマリー */}
+      {editing === 'thismonth' && latest && (
+        <div className="card" style={{ padding:'1.25rem' }}>
+          <div style={{ fontSize:'0.65rem', fontWeight:700, color:'var(--dim2)', marginBottom:'1rem', textTransform:'uppercase', letterSpacing:'0.1em' }}>📊 今月の達成状況</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:'0.75rem' }}>
+            {GOAL_KEYS.filter(g => goals['thismonth']?.[g.key]).map(g => {
+              const actual = getActual(g.key)
+              const target = parseFloat(goals['thismonth']?.[g.key] || 0)
+              const rate = getRate(actual, target)
+              if (actual === null) return null
+              return (
+                <div key={g.key} style={{ padding:'0.75rem', background:'rgba(255,255,255,0.02)', borderRadius:10, border:'1px solid var(--rim)', borderTop:'2px solid '+g.color }}>
+                  <div style={{ fontSize:'0.62rem', color:'var(--dim2)', fontWeight:700, marginBottom:'0.3rem' }}>{g.label}</div>
+                  <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.5rem', color:g.color, lineHeight:1 }}>
+                    {rate !== null ? rate+'%' : '-'}
+                  </div>
+                  <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.2rem' }}>
+                    {g.unit==='₱'?'₱'+Math.round(actual).toLocaleString():actual?.toFixed(2)+g.unit} / {g.unit==='₱'?'₱'+target.toLocaleString():target+g.unit}
+                  </div>
+                  <div style={{ height:3, borderRadius:2, background:'var(--rim)', marginTop:'0.4rem', overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:Math.min(rate||0,100)+'%', background:rate>=100?'var(--green)':rate>=70?'var(--yellow)':'var(--red)', borderRadius:2 }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
