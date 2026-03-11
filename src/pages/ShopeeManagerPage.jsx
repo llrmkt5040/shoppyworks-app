@@ -182,6 +182,7 @@ function ProfitTab({ incomeData, onUpload, fileName, inventoryItems, fxRate }) {
   const marginRate   = totalPrice?(totalRelease/totalPrice*100).toFixed(1):"—"
   const feeRate      = totalPrice?((commFee+serviceFee+transFee)/totalPrice*100).toFixed(1):"—"
   if (items.length===0) return <UploadArea label="MyIncome XLSX（ph_xxxx_income_xxxx.xlsx）" onUpload={onUpload} uploaded={false} fileName={fileName} />
+  // 再アップロードエリア（データあり時も表示）
   const waterfall = [
     {label:"売上（正価）",value:totalPrice,positive:true},
     {label:"返金・返品",value:-refund,positive:false},
@@ -193,6 +194,9 @@ function ProfitTab({ incomeData, onUpload, fileName, inventoryItems, fxRate }) {
   ].filter(w=>w.value!==0)
   return (
     <div>
+      <div style={{ marginBottom:12 }}>
+        <UploadArea label={`MyIncome XLSX を再アップロード（現在: ${fileName||"未アップロード"}）`} onUpload={onUpload} uploaded={true} fileName={fileName} />
+      </div>
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
         <KpiCard icon="💰" label="売上合計" value={`₱${totalPrice.toLocaleString()}`} color="#3b82f6" />
         <KpiCard icon="📊" label="入金合計（純利益）" value={`₱${totalRelease.toLocaleString()}`} color="#22c55e" />
