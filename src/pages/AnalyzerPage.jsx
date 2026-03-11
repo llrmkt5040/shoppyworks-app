@@ -30,7 +30,7 @@ function Toast({ msg, type }) {
   )
 }
 
-export default function AnalyzerPage({ onNavigate }) {
+export default function AnalyzerPage({ uid: propUid, onNavigate }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState('overview')
@@ -59,7 +59,7 @@ export default function AnalyzerPage({ onNavigate }) {
 
   async function loadFlags() {
     try {
-      const userId = auth.currentUser?.uid || 'anonymous'
+      const userId = propUid || propUid || auth.currentUser?.uid || 'anonymous'
       const snap = await getDocs(collection(db, 'product_flags'))
       const flags = {}
       snap.docs.forEach(d => {
@@ -72,7 +72,7 @@ export default function AnalyzerPage({ onNavigate }) {
 
   async function setFlag(productName, flag) {
     try {
-      const userId = auth.currentUser?.uid || 'anonymous'
+      const userId = propUid || propUid || auth.currentUser?.uid || 'anonymous'
       const { query, where, getDocs: gd, setDoc, doc: docRef, deleteDoc } = await import('firebase/firestore')
       const q = query(collection(db, 'product_flags'), where('userId','==',userId), where('productName','==',productName))
       const snap = await gd(q)
@@ -93,7 +93,7 @@ export default function AnalyzerPage({ onNavigate }) {
   async function loadLatestHistory() {
     setHistLoading(true)
     try {
-      const userId = auth.currentUser?.uid || 'anonymous'
+      const userId = propUid || propUid || auth.currentUser?.uid || 'anonymous'
       const snap = await getDocs(collection(db, 'xlsx_analyses'))
       const list = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
@@ -135,7 +135,7 @@ export default function AnalyzerPage({ onNavigate }) {
   async function saveToFirestore(result) {
     setSaving(true)
     try {
-      const userId = auth.currentUser?.uid || 'anonymous'
+      const userId = propUid || propUid || auth.currentUser?.uid || 'anonymous'
       const productsToSave = result.products.slice(0, 100).map(p => ({
         name: p.name || '', sales: p.sales || 0, ctr: p.ctr || 0,
         cvr: p.cvr || 0, bounce: p.bounce || 0,

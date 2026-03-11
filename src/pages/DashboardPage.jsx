@@ -4,7 +4,7 @@ import { collection, getDocs } from 'firebase/firestore'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts'
 import PlanPage from './PlanPage'
 
-export default function DashboardPage() {
+export default function DashboardPage({ uid: propUid }) {
   const [histories, setHistories] = useState([])
   const [loading, setLoading] = useState(true)
   const [diaryLogs, setDiaryLogs] = useState([])
@@ -20,7 +20,7 @@ export default function DashboardPage() {
       const result = await parseShopeeXLSX(file)
       result.kpis = calcKPIs(result.products)
       const { addDoc, collection: col, serverTimestamp } = await import('firebase/firestore')
-      const userId = auth.currentUser?.uid || 'anonymous'
+      const userId = propUid || propUid || auth.currentUser?.uid || 'anonymous'
       const productsToSave = result.products.slice(0, 100).map(p => ({
         name: p.name || '', sales: p.sales || 0, ctr: p.ctr || 0,
         cvr: p.cvr || 0, bounce: p.bounce || 0,
@@ -46,7 +46,7 @@ export default function DashboardPage() {
   async function loadData() {
     setLoading(true)
     try {
-      const userId = auth.currentUser?.uid || 'anonymous'
+      const userId = propUid || propUid || auth.currentUser?.uid || 'anonymous'
       const snap = await getDocs(collection(db, 'xlsx_analyses'))
       const list = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
@@ -59,7 +59,7 @@ export default function DashboardPage() {
       const snap2 = await getDocs(collection(db, 'action_logs'))
       const logs = snap2.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(d => d.uid === (auth.currentUser?.uid || 'anonymous'))
+        .filter(d => d.uid === (propUid || propUid || auth.currentUser?.uid || 'anonymous'))
         .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
         .slice(0, 30)
       setDiaryLogs(logs)
@@ -413,7 +413,7 @@ export default function DashboardPage() {
 
             {/* 目標管理タブ */}
             {tab === 'goals' && (
-              <GoalsTab uid={auth.currentUser?.uid} latest={latest} />
+              <GoalsTab uid={propUid || auth.currentUser?.uid} latest={latest} />
             )}
 
           </div>

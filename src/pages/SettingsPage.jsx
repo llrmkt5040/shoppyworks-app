@@ -145,6 +145,7 @@ export default function SettingsPage() {
     const email = newStaffEmail.trim().toLowerCase()
     if (!email || !email.includes("@")) return alert("正しいメールアドレスを入力してください")
     if (staffEmails.includes(email)) return alert("すでに登録されています")
+    if (staffEmails.length >= 1) return alert("スタッフは1アカウントまでです。\n追加の場合はオプションプランをご検討ください。")
     setStaffSaving(true)
     try {
       const updated = [...staffEmails, email]
