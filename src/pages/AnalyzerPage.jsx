@@ -1,5 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { parseShopeeXLSX, calcKPIs, CATEGORY_LABELS, CATEGORY_COLORS } from '../lib/xlsx'
+
+const FLAGS = {
+  standard: { label:'定番', emoji:'🟢', color:'#16a34a' },
+  seasonal:  { label:'季節', emoji:'🌸', color:'#ec4899' },
+  trend:     { label:'トレンド', emoji:'🔥', color:'#f97316' },
+  eol:       { label:'終売',  emoji:'⚫', color:'#6b7280' },
+}
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { db, auth } from '../lib/firebase'
 import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore'
@@ -31,6 +38,8 @@ export default function AnalyzerPage({ onNavigate }) {
   const [saving, setSaving] = useState(false)
   const [latestHistory, setLatestHistory] = useState(null)
   const [histories, setHistories] = useState([])
+  const [productFlags, setProductFlags] = useState({})
+  const [flagFilter, setFlagFilter] = useState('all')
   const [urgentCount, setUrgentCount] = useState(null)
   const [histLoading, setHistLoading] = useState(true)
 
@@ -45,7 +54,41 @@ export default function AnalyzerPage({ onNavigate }) {
 
   useEffect(() => {
     loadLatestHistory()
+    loadFlags()
   }, [])
+
+  async function loadFlags() {
+    try {
+      const userId = auth.currentUser?.uid || 'anonymous'
+      const snap = await getDocs(collection(db, 'product_flags'))
+      const flags = {}
+      snap.docs.forEach(d => {
+        const dat = d.data()
+        if (dat.userId === userId) flags[dat.productName] = dat.flag
+      })
+      setProductFlags(flags)
+    } catch(e) { console.error('flags load error:', e) }
+  }
+
+  async function setFlag(productName, flag) {
+    try {
+      const userId = auth.currentUser?.uid || 'anonymous'
+      const { query, where, getDocs: gd, setDoc, doc: docRef, deleteDoc } = await import('firebase/firestore')
+      const q = query(collection(db, 'product_flags'), where('userId','==',userId), where('productName','==',productName))
+      const snap = await gd(q)
+      const current = productFlags[productName]
+      if (current === flag) {
+        // 同じフラグをクリック → 解除
+        snap.docs.forEach(d => deleteDoc(docRef(db, 'product_flags', d.id)))
+        setProductFlags(prev => { const n = {...prev}; delete n[productName]; return n })
+      } else {
+        // 新しいフラグをセット
+        const id = userId + '_' + productName.replace(/[^a-zA-Z0-9]/g,'_').slice(0,50)
+        await setDoc(docRef(db, 'product_flags', id), { userId, productName, flag, updatedAt: new Date() })
+        setProductFlags(prev => ({ ...prev, [productName]: flag }))
+      }
+    } catch(e) { console.error('flag set error:', e); showToast('フラグの保存に失敗しました', 'error') }
+  }
 
   async function loadLatestHistory() {
     setHistLoading(true)
@@ -136,6 +179,7 @@ export default function AnalyzerPage({ onNavigate }) {
   }
 
   const filteredProducts = data ? data.products
+    .filter(p => flagFilter === 'all' || productFlags[p.name] === flagFilter)
     .filter(p => categoryFilter === 'all' || p.category === categoryFilter)
     .filter(p => (p.impressions || 0) >= minImpressions)
     .filter(p => (p.orders || 0) >= minSales)
@@ -323,6 +367,12 @@ export default function AnalyzerPage({ onNavigate }) {
                   <button key={k} onClick={() => setCategoryFilter(k)} style={{ padding:'0.28rem 0.7rem', borderRadius:8, cursor:'pointer', fontSize:'0.7rem', border:'1px solid var(--rim)', background:categoryFilter===k?'rgba(255,107,43,0.1)':'var(--card)', color:categoryFilter===k?'var(--orange)':'var(--dim2)', fontFamily:"'Zen Kaku Gothic New',sans-serif", fontWeight:700 }}>
                     {k==='all'?'すべて':CATEGORY_LABELS[k]}
                   </button>
+                ))}
+              </div>
+              <div style={{ display:'flex', gap:'0.35rem', flexWrap:'wrap' }}>
+                <button onClick={() => setFlagFilter('all')} style={{ padding:'0.28rem 0.7rem', borderRadius:8, cursor:'pointer', fontSize:'0.7rem', border:'1px solid var(--rim)', background:flagFilter==='all'?'rgba(255,107,43,0.1)':'var(--card)', color:flagFilter==='all'?'var(--orange)':'var(--dim2)', fontFamily:"'Zen Kaku Gothic New',sans-serif", fontWeight:700 }}>🏷️ 全フラグ</button>
+                {Object.entries(FLAGS).map(([k,f]) => (
+                  <button key={k} onClick={() => setFlagFilter(k)} style={{ padding:'0.28rem 0.7rem', borderRadius:8, cursor:'pointer', fontSize:'0.7rem', border:'1px solid var(--rim)', background:flagFilter===k?'rgba(255,107,43,0.1)':'var(--card)', color:flagFilter===k?'var(--orange)':'var(--dim2)', fontFamily:"'Zen Kaku Gothic New',sans-serif", fontWeight:700 }}>{f.emoji} {f.label}</button>
                 ))}
               </div>
               <div style={{ display:'flex', gap:'0.5rem', alignItems:'center', marginLeft:'auto' }}>
