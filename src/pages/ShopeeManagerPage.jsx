@@ -128,6 +128,7 @@ function ShippingTab({ orders, onUpload, fileName }) {
   const totalRevenue = orders.filter(o=>o.status!=="Cancelled").reduce((s,o)=>s+o.total,0)
   const cancelRate = orders.length ? ((counts["Cancelled"]||0)/orders.length*100).toFixed(1) : "0.0"
   if (orders.length===0) return <UploadArea label="注文レポート XLSX（Order_all_xxxx.xlsx）" onUpload={onUpload} uploaded={false} fileName={fileName} />
+  // データあり時も再アップロード可能
   return (
     <div>
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
