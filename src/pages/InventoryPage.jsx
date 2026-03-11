@@ -39,6 +39,35 @@ export default function InventoryPage({ uid }) {
     } catch(e) { console.warn("為替レート取得失敗", e) }
   }
 
+  async function bulkAddItems() {
+    const selectedSkus = Object.entries(bulkSelected).filter(([,v])=>v).map(([k])=>k)
+    if (selectedSkus.length === 0) return alert("SKUを選択してください")
+    setBulkSaving(true)
+    try {
+      const { db } = await import("../lib/firebase")
+      const { collection, addDoc } = await import("firebase/firestore")
+      for (const sku of selectedSkus) {
+        const skuInfo = skuOptions.find(s => s.sku === sku)
+        const cost = Number(bulkCost[sku]||0)
+        const costPhp = Number(bulkCostPhp[sku]||0)
+        const qty = Number(bulkQty[sku]||0)
+        await addDoc(collection(db,"inventory_items"), {
+          uid, sku,
+          name: skuInfo?.name?.slice(0,60) || sku,
+          qty, cost, costPhp,
+          supplier: bulkSupplier || "",
+          memo: "",
+          createdAt: new Date().toISOString()
+        })
+      }
+      setBulkSelected({}); setBulkCost({}); setBulkCostPhp({}); setBulkQty({})
+      setShowBulkForm(false)
+      loadItems()
+      alert("✅ " + selectedSkus.length + "件の商品を登録しました！")
+    } catch(e) { alert("登録エラー: " + e.message) }
+    setBulkSaving(false)
+  }
+
   async function loadSkuOptions() {
     try {
       const { db } = await import("../lib/firebase")
