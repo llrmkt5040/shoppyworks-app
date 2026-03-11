@@ -238,16 +238,28 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
       </div>
       </>)}
       {inventoryItems && inventoryItems.length > 0 && items.length > 0 && (() => {
-        console.log("income items[0]:", JSON.stringify(items[0]))
-        // SKU→仕入単価マップ
+        // SKU→仕入単価マップ（在庫棚卸から）
         const costMap = {}
         inventoryItems.forEach(i => { if(i.sku && i.costPhp > 0) costMap[i.sku] = { costPhp: Number(i.costPhp), name: i.name } })
-        // MyIncomeからSKU別売上集計
+        // OrderID→SKUマップ（オーダーレポートから）
+        const orderIdToSku = {}
+        const orderIdToProduct = {}
+        if (window._shopeeOrders) {
+          window._shopeeOrders.forEach(o => {
+            if (o.orderId && o.sku) {
+              orderIdToSku[o.orderId] = o.sku
+              orderIdToProduct[o.orderId] = o.product
+            }
+          })
+        }
+        // MyIncomeからSKU別売上集計（OrderIDで照合）
         const skuSales = {}
         items.forEach(item => {
-          const sku = item.sku || item["Parent SKU Reference No."] || ""
+          const orderId = item.orderId || ""
+          const sku = orderIdToSku[orderId] || item.sku || ""
+          const productName = orderIdToProduct[orderId] || item.productName || sku
           if (!sku) return
-          if (!skuSales[sku]) skuSales[sku] = { revenue: 0, toRelease: 0, qty: 0 }
+          if (!skuSales[sku]) skuSales[sku] = { revenue: 0, toRelease: 0, qty: 0, productName }
           skuSales[sku].revenue += Number(item.originalPrice || 0)
           skuSales[sku].toRelease += Number(item.toRelease || 0)
           skuSales[sku].qty += Number(item.qty || 1)
