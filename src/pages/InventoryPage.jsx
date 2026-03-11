@@ -33,20 +33,24 @@ export default function InventoryPage({ uid }) {
 
   async function loadOrderMap() {
     try {
-      const { db, auth } = await import("../lib/firebase")
-      const uid = auth.currentUser?.uid
-      if (!uid) return
-      const { collection, query, where, getDocs } = await import("firebase/firestore")
-      const q = query(collection(db, "shopee_orders"), where("userId","==",uid))
-      const snap = await getDocs(q)
+      if (!uid) { console.log("loadOrderMap: uid なし"); return }
+      console.log("loadOrderMap: uid=", uid)
+      const { db } = await import("../lib/firebase")
+      const { collection, getDocs } = await import("firebase/firestore")
+      // whereなしで全件取得してフィルタ
+      const snap = await getDocs(collection(db, "shopee_orders"))
+      console.log("shopee_orders 全件数:", snap.docs.length)
+      const myDocs = snap.docs.filter(d => d.data().userId === uid)
+      console.log("自分のドキュメント数:", myDocs.length)
       const map = {}
-      snap.docs.forEach(d => {
+      myDocs.forEach(d => {
         const orders = d.data().orders || []
+        console.log("orders件数:", orders.length, "sample:", JSON.stringify(orders[0]))
         orders.forEach(o => {
           const sku = o["sku"] || o["Parent SKU Reference No."] || ""
           const status = o["status"] || o["Order Status"] || ""
           const qty = Number(o["qty"] || o["Quantity"] || 1)
-          if (sku && (status === "Shipped" || status === "Delivered" || status === "Completed" || status === "Shipping" || status === "shipped" || status === "delivered")) {
+          if (sku && status !== "Cancelled" && status !== "Unpaid") {
             map[sku] = (map[sku] || 0) + qty
           }
         })
