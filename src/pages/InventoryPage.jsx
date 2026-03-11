@@ -194,7 +194,7 @@ export default function InventoryPage({ uid }) {
             </div>
             <div>
               <label style={labelStyle}>仕入単価 (¥)</label>
-              <input type="number" value={newItem.cost} onChange={e=>setNewItem(n=>({...n,cost:e.target.value}))} placeholder="0" style={inputStyle} />
+              <input type="number" value={newItem.cost} onChange={e=>{const v=e.target.value; setNewItem(n=>({...n,cost:v,costPhp:fxRate>0?(Math.round(Number(v)/fxRate*10)/10).toString():n.costPhp}))}} placeholder="0" style={inputStyle} />
             </div>
             <div>
               <label style={{...labelStyle,color:"#22c55e"}}>仕入単価 (₱) ← 粗利計算用</label>
