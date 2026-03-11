@@ -170,8 +170,12 @@ function ShippingTab({ orders, onUpload, fileName }) {
   )
 }
 
-function ProfitTab({ incomeData, onUpload, fileName, inventoryItems, fxRate }) {
-  const { items, summary:s } = incomeData
+function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpload, releasedFileName, inventoryItems, fxRate }) {
+  const [incomeTab, setIncomeTab] = useState("toRelease")
+  const activeData = incomeTab === "toRelease" ? incomeData : releasedData
+  const activeFileName = incomeTab === "toRelease" ? fileName : releasedFileName
+  const activeUpload = incomeTab === "toRelease" ? onUpload : onReleasedUpload
+  const { items, summary:s } = activeData
   const totalPrice   = Number(s.originalPrice)||items.reduce((a,i)=>a+i.originalPrice,0)
   const totalRelease = Number(s.totalToRelease)||items.reduce((a,i)=>a+i.toRelease,0)
   const commFee      = Math.abs(Number(s.commissionFee)||0)
@@ -181,7 +185,6 @@ function ProfitTab({ incomeData, onUpload, fileName, inventoryItems, fxRate }) {
   const refund       = Math.abs(Number(s.refundAmount)||0)
   const marginRate   = totalPrice?(totalRelease/totalPrice*100).toFixed(1):"—"
   const feeRate      = totalPrice?((commFee+serviceFee+transFee)/totalPrice*100).toFixed(1):"—"
-  if (items.length===0) return <UploadArea label="MyIncome XLSX（ph_xxxx_income_xxxx.xlsx）" onUpload={onUpload} uploaded={false} fileName={fileName} />
   // 再アップロードエリア（データあり時も表示）
   const waterfall = [
     {label:"売上（正価）",value:totalPrice,positive:true},
@@ -194,8 +197,17 @@ function ProfitTab({ incomeData, onUpload, fileName, inventoryItems, fxRate }) {
   ].filter(w=>w.value!==0)
   return (
     <div>
+      {/* To Release / Released タブ */}
+      <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+        {[{id:"toRelease",label:"📥 To Release（入金予定）"},{id:"released",label:"✅ Released（入金済み）"}].map(t=>(
+          <button key={t.id} onClick={()=>setIncomeTab(t.id)} style={{ padding:"0.4rem 1rem", borderRadius:8, border:"none", background:incomeTab===t.id?"var(--orange)":"var(--surface)", color:incomeTab===t.id?"#fff":"var(--dim2)", fontWeight:incomeTab===t.id?700:400, fontSize:"0.8rem", cursor:"pointer", border:"1px solid var(--rim)" }}>{t.label}</button>
+        ))}
+      </div>
+      {items.length===0 ? (
+        <UploadArea label={`MyIncome XLSX（${incomeTab==="toRelease"?"To Release":"Released"}）`} onUpload={activeUpload} uploaded={false} fileName={activeFileName} />
+      ) : (<>
       <div style={{ marginBottom:12 }}>
-        <UploadArea label={`MyIncome XLSX を再アップロード（現在: ${fileName||"未アップロード"}）`} onUpload={onUpload} uploaded={true} fileName={fileName} />
+        <UploadArea label={`再アップロード（現在: ${activeFileName||"未アップロード"}）`} onUpload={activeUpload} uploaded={true} fileName={activeFileName} />
       </div>
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
         <KpiCard icon="💰" label="売上合計" value={`₱${totalPrice.toLocaleString()}`} color="#3b82f6" />
@@ -224,7 +236,8 @@ function ProfitTab({ incomeData, onUpload, fileName, inventoryItems, fxRate }) {
           <span style={{ fontWeight:800, fontSize:18, color:"#16a34a" }}>₱{totalRelease.toLocaleString()}</span>
         </div>
       </div>
-      {inventoryItems && inventoryItems.length > 0 && (() => {
+      </>)}
+      {inventoryItems && inventoryItems.length > 0 && items.length > 0 && (() => {
         // SKU→仕入単価マップ
         const costMap = {}
         inventoryItems.forEach(i => { if(i.sku && i.costPhp > 0) costMap[i.sku] = { costPhp: Number(i.costPhp), name: i.name } })
