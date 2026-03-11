@@ -13,10 +13,12 @@ export default function InventoryPage({ uid }) {
     setLoading(true)
     try {
       const { db } = await import("../lib/firebase")
-      const { collection, query, where, orderBy, getDocs } = await import("firebase/firestore")
-      const q = query(collection(db, "inventory_items"), where("uid","==",uid), orderBy("createdAt","desc"))
+      const { collection, query, where, getDocs } = await import("firebase/firestore")
+      const q = query(collection(db, "inventory_items"), where("uid","==",uid))
       const snap = await getDocs(q)
-      setItems(snap.docs.map(d => ({ id:d.id, ...d.data() })))
+      const list = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+      list.sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""))
+      setItems(list)
     } catch(e) { console.error(e) }
     setLoading(false)
   }
