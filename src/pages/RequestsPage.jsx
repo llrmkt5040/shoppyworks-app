@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 
 function calcShippingPHP(weightG) {
   if (!weightG || weightG <= 0) return 0
@@ -227,7 +227,7 @@ function CaseForm({ uid, buyers, initialData, onSaved, onCancel }) {
             <div><label style={lbl}>⚖️ 重量 (g)</label><input type="number" style={inp} value={product.weightG} onChange={e=>setProduct(p=>({...p,weightG:e.target.value}))} placeholder="例: 500" />{product.weightG>0&&<div style={{ fontSize:"0.72rem",color:"#10b981",marginTop:"0.25rem" }}>→ 国際送料: ₱{calcShippingPHP(parseFloat(product.weightG)).toLocaleString()}</div>}</div>
             <div><label style={lbl}>🔢 数量</label><input type="number" style={inp} value={product.qty} onChange={e=>setProduct(p=>({...p,qty:e.target.value}))} placeholder="1" /></div>
             <div><label style={lbl}>🔗 仕入れURL</label><input style={inp} value={product.url} onChange={e=>setProduct(p=>({...p,url:e.target.value}))} placeholder="Amazon URL など" /></div>
-            <div style={{ gridColumn:"1/-1" }}><label style={lbl}>📝 メモ（色・サイズ等）</label><input style={inp} value={product.note} onChange={e=>setProduct(p=>({...p,note:e.target.value}))} placeholder="カラー・サイズ等" /></div>
+            <div style={{ gridColumn:"1/-1" }}><label style={lbl}>📝 メモ（色・サイズ等）</label><textarea style={{...inp, minHeight:80, resize:"vertical", lineHeight:1.6}} value={product.note} onChange={e=>setProduct(p=>({...p,note:e.target.value}))} placeholder="カラー・サイズ、特記事項など自由に記入" /></div>
           </div>
           <div style={{ display:"flex",gap:"0.5rem" }}>
             {!isEdit&&<button onClick={()=>setStep(1)} style={{ padding:"0.5rem 1rem",borderRadius:8,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",cursor:"pointer" }}>← 戻る</button>}
@@ -276,6 +276,81 @@ function CaseForm({ uid, buyers, initialData, onSaved, onCancel }) {
             <button onClick={()=>setStep(3)} style={{ padding:"0.5rem 1rem",borderRadius:8,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",cursor:"pointer" }}>← 戻る</button>
             <button onClick={saveCase} disabled={saving} style={{ padding:"0.5rem 2rem",borderRadius:8,border:"none",background:"var(--orange)",color:"#fff",fontWeight:700,cursor:saving?"not-allowed":"pointer",fontSize:"0.9rem" }}>{saving?"保存中...":(isEdit?"✅ 更新する":"✅ 案件を保存")}</button>
             {isEdit&&<button onClick={onCancel} style={{ padding:"0.5rem 1rem",borderRadius:8,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",cursor:"pointer" }}>キャンセル</button>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ChatLog({ item, uid }) {
+  const [logs, setLogs] = useState([])
+  const [text, setText] = useState("")
+  const [sending, setSending] = useState(false)
+  const [open, setOpen] = useState(false)
+  const bottomRef = useRef(null)
+
+  useEffect(() => { if (open) loadLogs() }, [open])
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior:"smooth" }) }, [logs])
+
+  async function loadLogs() {
+    try {
+      const { db } = await import("../lib/firebase")
+      const { collection, query, where, orderBy, getDocs } = await import("firebase/firestore")
+      const q = query(collection(db, "pasabuy_logs"), where("requestId","==",item.id), orderBy("createdAt","asc"))
+      const snap = await getDocs(q)
+      setLogs(snap.docs.map(d => ({ id:d.id, ...d.data() })))
+    } catch(e) { console.error(e) }
+  }
+
+  async function sendLog() {
+    if (!text.trim()) return
+    setSending(true)
+    try {
+      const { db } = await import("../lib/firebase")
+      const { collection, addDoc } = await import("firebase/firestore")
+      const now = new Date().toISOString()
+      await addDoc(collection(db, "pasabuy_logs"), { requestId:item.id, uid, text:text.trim(), createdAt:now })
+      setLogs(prev => [...prev, { text:text.trim(), createdAt:now }])
+      setText("")
+    } catch(e) { alert("送信エラー: "+e.message) }
+    setSending(false)
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return ""
+    const d = new Date(iso)
+    return (d.getMonth()+1)+"/"+d.getDate()+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")
+  }
+
+  return (
+    <div style={{ marginTop:"0.75rem" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ fontSize:"0.72rem", color:"var(--orange)", background:"transparent", border:"1px solid rgba(255,107,43,0.3)", borderRadius:6, padding:"0.25rem 0.7rem", cursor:"pointer", fontWeight:700 }}>
+        💬 やりとり {logs.length > 0 ? `(${logs.length})` : ""} {open ? "▲" : "▼"}
+      </button>
+      {open && (
+        <div style={{ marginTop:"0.5rem", border:"1px solid var(--rim)", borderRadius:10, overflow:"hidden" }}>
+          <div style={{ maxHeight:220, overflowY:"auto", padding:"0.75rem", display:"flex", flexDirection:"column", gap:"0.5rem", background:"rgba(255,255,255,0.02)" }}>
+            {logs.length === 0 && <div style={{ textAlign:"center", color:"var(--dim2)", fontSize:"0.75rem", padding:"1rem" }}>まだやりとりはありません</div>}
+            {logs.map((l, i) => (
+              <div key={i} style={{ background:"rgba(255,107,43,0.06)", borderRadius:8, padding:"0.5rem 0.75rem", border:"1px solid rgba(255,107,43,0.15)" }}>
+                <div style={{ fontSize:"0.78rem", lineHeight:1.6, color:"var(--text)", whiteSpace:"pre-wrap" }}>{l.text}</div>
+                <div style={{ fontSize:"0.62rem", color:"var(--dim2)", marginTop:"0.2rem", textAlign:"right" }}>{fmtTime(l.createdAt)}</div>
+              </div>
+            ))}
+            <div ref={bottomRef} />
+          </div>
+          <div style={{ padding:"0.5rem", borderTop:"1px solid var(--rim)", display:"flex", gap:"0.5rem", background:"var(--surface)" }}>
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => { if (e.key==="Enter" && e.metaKey) sendLog() }}
+              placeholder="メモ・やりとりを追記... (Cmd+Enterで送信)"
+              style={{ flex:1, padding:"0.4rem 0.6rem", borderRadius:8, border:"1px solid var(--rim)", background:"var(--card)", color:"var(--text)", fontSize:"0.78rem", resize:"none", minHeight:52, outline:"none", lineHeight:1.5, fontFamily:"inherit" }}
+            />
+            <button onClick={sendLog} disabled={sending || !text.trim()} style={{ padding:"0.4rem 0.9rem", borderRadius:8, border:"none", background:"var(--orange)", color:"#fff", fontWeight:700, cursor:sending||!text.trim()?"not-allowed":"pointer", fontSize:"0.75rem", opacity:!text.trim()?0.5:1, alignSelf:"flex-end" }}>
+              {sending ? "..." : "送信"}
+            </button>
           </div>
         </div>
       )}
@@ -368,6 +443,7 @@ export default function RequestsPage({ uid }) {
                     </div>
                     {item.url&&(<div style={{ marginTop:"0.4rem",fontSize:"0.72rem" }}><a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color:"#818cf8",textDecoration:"none" }}>🔗 仕入れURL</a></div>)}
                     {item.note&&<div style={{ fontSize:"0.72rem",color:"var(--dim2)",marginTop:"0.25rem" }}>{item.note}</div>}
+                    <ChatLog item={item} uid={uid} />
                     {item.offerEn&&(<div style={{ marginTop:"0.5rem",padding:"0.5rem 0.75rem",background:"rgba(255,255,255,0.02)",borderRadius:6,fontSize:"0.75rem",color:"var(--dim2)",borderLeft:"2px solid rgba(129,140,248,0.4)" }}>{item.offerEn}</div>)}
                   </div>
                 )
