@@ -114,6 +114,9 @@ function parseIncomeXlsx(wb) {
     originalPrice: Number(r["Original Product Price"])||0,
     toRelease: Number(r["Total To Release Amount"])||0,
     status: r["Billing Item Status"]||"",
+    sku: r["Parent SKU Reference No."]||r["SKU Reference No."]||"",
+    qty: Number(r["Quantity"])||1,
+    productName: r["Product Name"]||"",
   }))
   return { items, summary }
 }
