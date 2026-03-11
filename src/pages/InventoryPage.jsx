@@ -7,8 +7,46 @@ export default function InventoryPage({ uid }) {
   const [newItem, setNewItem] = useState({ name:"", qty:"", cost:"", costPhp:"", sku:"", supplier:"", memo:"" })
   const [orderSkus, setOrderSkus] = useState([]) // オーダーレポートから取得したSKU一覧
   const [editItem, setEditItem] = useState(null) // 編集中のアイテム
+  const [fxRate, setFxRate] = useState(0) // 為替レート(¥/₱)
+  const [orderMap, setOrderMap] = useState({}) // SKU→出荷数マップ
 
   useEffect(() => { loadItems(); loadOrderSkus() }, [])
+
+  async function loadFxRate() {
+    try {
+      const { db } = await import("../lib/firebase")
+      const { collection, getDocs } = await import("firebase/firestore")
+      const snap = await getDocs(collection(db, "fx_rates"))
+      if (!snap.empty) {
+        const latest = snap.docs.map(d=>d.data()).sort((a,b)=>(b.date||"").localeCompare(a.date||""))[0]
+        setFxRate(Number(latest.rate)||0)
+      }
+    } catch(e) { console.warn("為替レート取得失敗", e) }
+  }
+
+  async function loadOrderMap() {
+    try {
+      const uid = auth.currentUser?.uid
+      if (!uid) return
+      const { db } = await import("../lib/firebase")
+      const { collection, query, where, getDocs } = await import("firebase/firestore")
+      const q = query(collection(db, "shopee_orders"), where("userId","==",uid))
+      const snap = await getDocs(q)
+      const map = {}
+      snap.docs.forEach(d => {
+        const orders = d.data().orders || []
+        orders.forEach(o => {
+          const sku = o["Parent SKU Reference No."] || o["sku"] || ""
+          const status = o["Order Status"] || ""
+          const qty = Number(o["Quantity"] || 1)
+          if (sku && (status === "Shipped" || status === "Delivered" || status === "Completed" || status === "Shipping")) {
+            map[sku] = (map[sku] || 0) + qty
+          }
+        })
+      })
+      setOrderMap(map)
+    } catch(e) { console.warn("オーダーマップ取得失敗", e) }
+  }
 
   async function loadItems() {
     setLoading(true)
@@ -58,6 +96,8 @@ export default function InventoryPage({ uid }) {
       setNewItem({ name:"", qty:"", cost:"", costPhp:"", sku:"", supplier:"", memo:"" })
       setShowForm(false)
       loadItems()
+    loadFxRate()
+    loadOrderMap()
     } catch(e) { alert("追加エラー: " + e.message) }
   }
 
@@ -231,6 +271,7 @@ export default function InventoryPage({ uid }) {
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>数量</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>単価(¥)</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"#22c55e",fontSize:"0.65rem",textTransform:"uppercase"}}>仕入(₱)</th>
+                <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"#a78bfa",fontSize:"0.65rem",textTransform:"uppercase"}}>現在庫</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"center",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>操作</th>
               </tr>
             </thead>
@@ -250,6 +291,12 @@ export default function InventoryPage({ uid }) {
                   <td style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"#22c55e"}}>
                     {Number(item.costPhp||0) > 0 ? `₱${Number(item.costPhp).toLocaleString()}` : <span style={{color:"var(--dim2)",fontSize:"0.72rem"}}>未登録</span>}
                   </td>
+                  <td style={{padding:"0.75rem 1rem",textAlign:"right"}}>{(()=>{
+                    const sold = item.sku ? (orderMap[item.sku]||0) : 0
+                    const current = Number(item.qty) - sold
+                    const color = current <= 0 ? "#ef4444" : current <= 10 ? "#f59e0b" : "#a78bfa"
+                    return <span style={{fontWeight:700,color}}>{current.toLocaleString()}{sold>0 && <span style={{fontSize:"0.65rem",color:"var(--dim2)",marginLeft:4}}>(-{sold})</span>}</span>
+                  })()}</td>
                   <td style={{padding:"0.75rem 1rem",textAlign:"center"}}>
                     <div style={{display:"flex",gap:4,justifyContent:"center"}}>
                       <button onClick={()=>setEditItem({...item})} style={{padding:"0.2rem 0.6rem",borderRadius:6,border:"1px solid rgba(59,130,246,0.3)",background:"rgba(59,130,246,0.1)",color:"#3b82f6",fontSize:"0.7rem",cursor:"pointer"}}>編集</button>
