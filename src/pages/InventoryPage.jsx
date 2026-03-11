@@ -166,10 +166,18 @@ export default function InventoryPage({ uid }) {
             <span style={{fontSize:"0.72rem",color:"#3b82f6"}}>📦 オーダーSKU <strong>{orderSkus.length}</strong>件取得済み</span>
           )}
         </div>
-        <button onClick={() => setShowForm(!showForm)}
-          style={{padding:"0.5rem 1.2rem",borderRadius:8,border:"none",background:"var(--orange)",color:"#fff",fontSize:"0.8rem",fontWeight:700,cursor:"pointer"}}>
-          + 追加
-        </button>
+        <div style={{display:"flex",gap:8}}>
+          {orderSkus.length > 0 && (
+            <button onClick={() => setShowBulkForm(true)}
+              style={{padding:"0.5rem 1.2rem",borderRadius:8,border:"1px solid rgba(59,130,246,0.5)",background:"rgba(59,130,246,0.1)",color:"#3b82f6",fontSize:"0.8rem",fontWeight:700,cursor:"pointer"}}>
+              📦 一括登録
+            </button>
+          )}
+          <button onClick={() => setShowForm(!showForm)}
+            style={{padding:"0.5rem 1.2rem",borderRadius:8,border:"none",background:"var(--orange)",color:"#fff",fontSize:"0.8rem",fontWeight:700,cursor:"pointer"}}>
+            + 追加
+          </button>
+        </div>
       </div>
 
       {/* 追加フォーム */}
@@ -234,6 +242,96 @@ export default function InventoryPage({ uid }) {
       )}
 
       {/* テーブル */}
+      {/* 一括登録モーダル */}
+      {showBulkForm && (() => {
+        const registeredSkus = new Set(items.map(i => i.sku).filter(Boolean))
+        const unregistered = skuOptions.filter(s => !registeredSkus.has(s.sku))
+        return (
+          <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}>
+            <div style={{background:"var(--surface)",borderRadius:14,padding:"1.5rem",width:"95%",maxWidth:780,border:"1px solid var(--rim)",maxHeight:"85vh",overflowY:"auto"}}>
+              <div style={{fontWeight:800,fontSize:"1rem",marginBottom:"0.5rem",color:"var(--text)"}}>📦 オーダーSKUから一括登録</div>
+              <div style={{fontSize:"0.75rem",color:"var(--dim2)",marginBottom:"1rem"}}>
+                オーダーレポートに存在するSKUのうち、未登録の{unregistered.length}件が表示されています
+              </div>
+
+              {/* 共通仕入先 */}
+              <div style={{marginBottom:"1rem"}}>
+                <label style={{fontSize:"0.65rem",fontWeight:700,color:"var(--dim2)",display:"block",marginBottom:"0.25rem"}}>共通仕入先（全商品に適用）</label>
+                <input value={bulkSupplier} onChange={e=>setBulkSupplier(e.target.value)} placeholder="例: DAISO卸・LS-System"
+                  style={{padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--bg)",color:"var(--text)",fontSize:"0.85rem",width:"300px"}} />
+              </div>
+
+              {/* 全選択 */}
+              <div style={{marginBottom:"0.75rem",display:"flex",gap:8,alignItems:"center"}}>
+                <button onClick={()=>{const s={};unregistered.forEach(u=>s[u.sku]=true);setBulkSelected(s)}}
+                  style={{padding:"0.3rem 0.8rem",borderRadius:6,border:"1px solid rgba(59,130,246,0.3)",background:"rgba(59,130,246,0.1)",color:"#3b82f6",fontSize:"0.72rem",cursor:"pointer"}}>全選択</button>
+                <button onClick={()=>setBulkSelected({})}
+                  style={{padding:"0.3rem 0.8rem",borderRadius:6,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",fontSize:"0.72rem",cursor:"pointer"}}>全解除</button>
+                <span style={{fontSize:"0.72rem",color:"var(--dim2)"}}>{Object.values(bulkSelected).filter(Boolean).length}件選択中</span>
+              </div>
+
+              {/* SKU一覧 */}
+              <div style={{border:"1px solid var(--rim)",borderRadius:10,overflow:"hidden",marginBottom:"1rem"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:"0.78rem"}}>
+                  <thead>
+                    <tr style={{background:"rgba(255,255,255,0.05)"}}>
+                      <th style={{padding:"0.5rem 0.75rem",textAlign:"center",width:40}}>✓</th>
+                      <th style={{padding:"0.5rem 0.75rem",textAlign:"left",color:"var(--dim2)",fontSize:"0.65rem"}}>SKU / 商品名</th>
+                      <th style={{padding:"0.5rem 0.75rem",textAlign:"right",color:"var(--dim2)",fontSize:"0.65rem",width:90}}>数量</th>
+                      <th style={{padding:"0.5rem 0.75rem",textAlign:"right",color:"var(--dim2)",fontSize:"0.65rem",width:110}}>仕入単価(¥)</th>
+                      <th style={{padding:"0.5rem 0.75rem",textAlign:"right",color:"#22c55e",fontSize:"0.65rem",width:110}}>仕入単価(₱)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unregistered.length === 0 ? (
+                      <tr><td colSpan={5} style={{padding:"1.5rem",textAlign:"center",color:"var(--dim2)"}}>未登録のSKUはありません 🎉</td></tr>
+                    ) : unregistered.map((s,i) => (
+                      <tr key={s.sku} style={{borderTop:"1px solid var(--rim)",background:bulkSelected[s.sku]?"rgba(59,130,246,0.06)":"transparent"}}>
+                        <td style={{padding:"0.4rem 0.75rem",textAlign:"center"}}>
+                          <input type="checkbox" checked={!!bulkSelected[s.sku]}
+                            onChange={e=>setBulkSelected(b=>({...b,[s.sku]:e.target.checked}))}
+                            style={{cursor:"pointer",width:15,height:15}} />
+                        </td>
+                        <td style={{padding:"0.4rem 0.75rem"}}>
+                          <div style={{fontFamily:"monospace",fontSize:"0.72rem",color:"#3b82f6",fontWeight:600}}>{s.sku}</div>
+                          <div style={{fontSize:"0.68rem",color:"var(--dim2)",marginTop:2}}>{s.name?.slice(0,50)}</div>
+                        </td>
+                        <td style={{padding:"0.4rem 0.75rem",textAlign:"right"}}>
+                          <input type="number" value={bulkQty[s.sku]||""} onChange={e=>setBulkQty(b=>({...b,[s.sku]:e.target.value}))}
+                            placeholder="0" disabled={!bulkSelected[s.sku]}
+                            style={{width:70,padding:"0.3rem 0.4rem",borderRadius:6,border:"1px solid var(--rim)",background:"var(--bg)",color:"var(--text)",fontSize:"0.78rem",textAlign:"right",opacity:bulkSelected[s.sku]?1:0.4}} />
+                        </td>
+                        <td style={{padding:"0.4rem 0.75rem",textAlign:"right"}}>
+                          <input type="number" value={bulkCost[s.sku]||""} onChange={e=>{
+                            const v=e.target.value
+                            setBulkCost(b=>({...b,[s.sku]:v}))
+                            if(fxRate>0) setBulkCostPhp(b=>({...b,[s.sku]:(Math.round(Number(v)/fxRate*10)/10).toString()}))
+                          }} placeholder="0" disabled={!bulkSelected[s.sku]}
+                            style={{width:80,padding:"0.3rem 0.4rem",borderRadius:6,border:"1px solid var(--rim)",background:"var(--bg)",color:"var(--text)",fontSize:"0.78rem",textAlign:"right",opacity:bulkSelected[s.sku]?1:0.4}} />
+                        </td>
+                        <td style={{padding:"0.4rem 0.75rem",textAlign:"right"}}>
+                          <input type="number" value={bulkCostPhp[s.sku]||""} onChange={e=>setBulkCostPhp(b=>({...b,[s.sku]:e.target.value}))}
+                            placeholder={fxRate>0?"自動計算":"0"} disabled={!bulkSelected[s.sku]}
+                            style={{width:80,padding:"0.3rem 0.4rem",borderRadius:6,border:"1px solid var(--rim)",background:"var(--bg)",color:"#22c55e",fontSize:"0.78rem",textAlign:"right",opacity:bulkSelected[s.sku]?1:0.4}} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button onClick={()=>setShowBulkForm(false)}
+                  style={{padding:"0.5rem 1rem",borderRadius:8,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",fontSize:"0.8rem",cursor:"pointer"}}>キャンセル</button>
+                <button onClick={bulkAddItems} disabled={bulkSaving}
+                  style={{padding:"0.5rem 1.5rem",borderRadius:8,border:"none",background:"#3b82f6",color:"#fff",fontSize:"0.8rem",fontWeight:700,cursor:"pointer",opacity:bulkSaving?0.6:1}}>
+                  {bulkSaving?"登録中...":"📦 一括登録する"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
       {/* 編集モーダル */}
       {editItem && (
         <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}>
