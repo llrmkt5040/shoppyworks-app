@@ -171,7 +171,7 @@ function ShippingTab({ orders, onUpload, fileName }) {
   )
 }
 
-function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpload, releasedFileName, inventoryItems, fxRate }) {
+function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpload, releasedFileName, inventoryItems, fxRate, orders }) {
   const [incomeTab, setIncomeTab] = useState("toRelease")
   const activeData = incomeTab === "toRelease" ? incomeData : releasedData
   const activeFileName = incomeTab === "toRelease" ? fileName : releasedFileName
@@ -245,14 +245,12 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
         // OrderID→SKUマップ（オーダーレポートから）
         const orderIdToSku = {}
         const orderIdToProduct = {}
-        if (window._shopeeOrders) {
-          window._shopeeOrders.forEach(o => {
-            if (o.orderId && o.sku) {
-              orderIdToSku[o.orderId] = o.sku
-              orderIdToProduct[o.orderId] = o.product
-            }
-          })
-        }
+        ;(orders||[]).forEach(o => {
+          if (o.orderId && o.sku) {
+            orderIdToSku[o.orderId] = o.sku
+            orderIdToProduct[o.orderId] = o.product
+          }
+        })
         // MyIncomeからSKU別売上集計（OrderIDで照合）
         const skuSales = {}
         items.forEach(item => {
@@ -501,7 +499,7 @@ export default function ShopeeManagerPage() {
         </div>
         <div style={{ padding:20 }}>
           {tab==="shipping"&&<ShippingTab orders={orders} onUpload={handleOrderUpload} fileName={orderFileName} />}
-          {tab==="profit"&&<ProfitTab incomeData={incomeData} onUpload={handleIncomeUpload} fileName={incomeFileName} releasedData={releasedData} onReleasedUpload={handleReleasedUpload} releasedFileName={releasedFileName} inventoryItems={inventoryItems} fxRate={fxRate} />}
+          {tab==="profit"&&<ProfitTab incomeData={incomeData} onUpload={handleIncomeUpload} fileName={incomeFileName} releasedData={releasedData} onReleasedUpload={handleReleasedUpload} releasedFileName={releasedFileName} inventoryItems={inventoryItems} fxRate={fxRate} orders={orders} />}
           {tab==="cashflow"&&<CashflowTab incomeData={incomeData} cashflowItems={cashflowItems} onAddExpense={handleAddExpense} />}
         </div>
       </div>
