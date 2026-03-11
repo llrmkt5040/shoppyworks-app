@@ -51,6 +51,7 @@ export default function AppLayout() {
       case "actionlog": return <ActionLogPage uid={uid} />
       case "inventory": return <InventoryPage uid={uid} />
       case "requests":  return <RequestsPage uid={uid} />
+      case "shopee":    return <ShopeeManagerPage />
       case "settings":  return <SettingsPage uid={uid} profile={profile} />
       default:          return <DashboardPage uid={uid} />
     }
