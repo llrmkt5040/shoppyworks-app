@@ -39,13 +39,10 @@ export default function InventoryPage({ uid }) {
       const { collection, getDocs } = await import("firebase/firestore")
       // whereなしで全件取得してフィルタ
       const snap = await getDocs(collection(db, "shopee_orders"))
-      console.log("shopee_orders 全件数:", snap.docs.length)
       const myDocs = snap.docs.filter(d => d.data().userId === uid)
-      console.log("自分のドキュメント数:", myDocs.length)
       const map = {}
       myDocs.forEach(d => {
         const orders = d.data().orders || []
-        console.log("orders件数:", orders.length, "sample:", JSON.stringify(orders[0]))
         orders.forEach(o => {
           const sku = o["sku"] || o["Parent SKU Reference No."] || ""
           const status = o["status"] || o["Order Status"] || ""
@@ -55,7 +52,6 @@ export default function InventoryPage({ uid }) {
           }
         })
       })
-      console.log("orderMap:", JSON.stringify(map))
       setOrderMap(map)
     } catch(e) { console.warn("オーダーマップ取得失敗", e) }
   }
