@@ -6,6 +6,7 @@ import AnalyzerPage from "../pages/AnalyzerPage"
 import ActionLogPage from "../pages/ActionLogPage"
 import InventoryPage from "../pages/InventoryPage"
 import RequestsPage from "../pages/RequestsPage"
+import ShopeeManagerPage from "../pages/ShopeeManagerPage"
 import SettingsPage from "../pages/SettingsPage"
 
 const NAV = [
@@ -14,6 +15,7 @@ const NAV = [
   { id: "actionlog",  icon: "📅", label: "ShopeeDiary",         sub: "日次管理"   },
   { id: "inventory",  icon: "📦", label: "ShopeeStockManager",  sub: "在庫棚卸"   },
   { id: "requests",   icon: "🛍️", label: "PasabuyManager",      sub: "御用聞き"   },
+  { id: "shopee",    icon: "📂", label: "ShopeeManager",   sub: "一元管理"   },
   { id: "settings",   icon: "⚙️", label: "設定",                sub: ""           },
 ]
 
