@@ -201,7 +201,7 @@ export default function InventoryPage({ uid }) {
               <input type="number" value={newItem.qty} onChange={e=>setNewItem(n=>({...n,qty:e.target.value}))} placeholder="0" style={inputStyle} />
             </div>
             <div>
-              <label style={labelStyle}>仕入単価 (¥)</label>
+              <label style={labelStyle}>仕入単価 (¥){fxRate>0&&<span style={{fontSize:"0.6rem",color:"#22c55e",marginLeft:4}}>→ ₱自動換算({fxRate})</span>}</label>
               <input type="number" value={newItem.cost} onChange={e=>{const v=e.target.value; setNewItem(n=>({...n,cost:v,costPhp:fxRate>0?(Math.round(Number(v)/fxRate*10)/10).toString():n.costPhp}))}} placeholder="0" style={inputStyle} />
             </div>
             <div>
