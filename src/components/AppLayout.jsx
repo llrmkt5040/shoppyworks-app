@@ -39,45 +39,48 @@ export default function AppLayout() {
         } catch {
           setProfile({ uid: u.uid, name: u.displayName, email: u.email })
         }
-        // スタッフアクセスチェック: 自分のメールが他ユーザーのstaff_emailsに含まれているか確認
-        try {
-          const allSettings = await getDocs(collection(db, "user_settings"))
-          for (const docSnap of allSettings.docs) {
-            const data = docSnap.data()
-            const emails = (data.staff_emails || []).map(e => e.toLowerCase())
-            if (emails.includes(u.email?.toLowerCase())) {
-              const targetUid = docSnap.id
-              if (targetUid !== u.uid) {
-                // usersコレクションからターゲットのプロフィール取得
-                const targetSnap = await getDoc(doc(db, "users", targetUid))
-                const targetData = targetSnap.exists() ? targetSnap.data() : {}
-                // allowed_emailsからも名前を取得試みる
-                const allowSnap = await getDoc(doc(db, "allowed_emails", targetData.email || ""))
-                const allowData = allowSnap.exists() ? allowSnap.data() : {}
-                const target = {
-                  uid: targetUid,
-                  name: targetData.name || allowData.name || targetData.email || targetUid,
-                  email: targetData.email || ""
-                }
-                console.log("✅ スタッフターゲット検出:", target)
-                setStaffTarget(target)
-                break
-              }
-            }
-          }
-        } catch(e) { console.error("staff check error:", e) }
       } else {
         setStaffTarget(null)
       }
     })
   }, [])
 
-  const isStaff = !!staffTarget
+  // スタッフチェック: userがセットされたら実行
+  useEffect(() => {
+    if (!user) return
+    async function checkStaff() {
+      try {
+        const allSettings = await getDocs(collection(db, "user_settings"))
+        for (const docSnap of allSettings.docs) {
+          const data = docSnap.data()
+          const emails = (data.staff_emails || []).map(e => e.toLowerCase())
+          if (emails.includes(user.email?.toLowerCase())) {
+            const targetUid = docSnap.id
+            if (targetUid !== user.uid) {
+              const targetSnap = await getDoc(doc(db, "users", targetUid))
+              const targetData = targetSnap.exists() ? targetSnap.data() : {}
+              const allowSnap = await getDoc(doc(db, "allowed_emails", targetData.email || ""))
+              const allowData = allowSnap.exists() ? allowSnap.data() : {}
+              const target = {
+                uid: targetUid,
+                name: targetData.name || allowData.name || targetData.email || targetUid,
+                email: targetData.email || ""
+              }
+              setStaffTarget(target)
+              return
+            }
+          }
+        }
+        setStaffTarget(null)
+      } catch(e) { console.error("staff check error:", e) }
+    }
+    checkStaff()
+  }, [user])
 
   function renderPage() {
     const uid = staffTarget ? staffTarget.uid : (profile?.uid || user?.uid)
     // スタッフは設定ページにアクセス不可
-    if (isStaff && page === "settings") return (
+    if (!!staffTarget && page === "settings") return (
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:"1rem"}}>
         <div style={{fontSize:"2rem"}}>🔒</div>
         <div style={{fontSize:"1rem",fontWeight:700,color:"var(--text)"}}>設定ページはアクセスできません</div>
