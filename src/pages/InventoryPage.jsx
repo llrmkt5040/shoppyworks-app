@@ -4,7 +4,7 @@ export default function InventoryPage({ uid }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [newItem, setNewItem] = useState({ name: "", qty: "", cost: "", memo: "" })
+  const [newItem, setNewItem] = useState({ name: "", qty: "", cost: "", costPhp: "", sku: "", supplier: "", memo: "" })
 
   useEffect(() => { loadItems() }, [])
 
@@ -29,6 +29,9 @@ export default function InventoryPage({ uid }) {
         ...newItem, uid,
         qty: Number(newItem.qty)||0,
         cost: Number(newItem.cost)||0,
+        costPhp: Number(newItem.costPhp)||0,
+        sku: newItem.sku||"",
+        supplier: newItem.supplier||"",
         createdAt: new Date().toISOString()
       })
       setNewItem({ name: "", qty: "", cost: "", memo: "" })
@@ -63,7 +66,7 @@ export default function InventoryPage({ uid }) {
       </div>
       {showForm && (
         <div className="card" style={{padding:"1.25rem",marginBottom:"1rem",border:"1px solid rgba(249,115,22,0.3)"}}>
-          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
             <div>
               <label style={{fontSize:"0.65rem",fontWeight:700,color:"var(--dim2)",display:"block",marginBottom:"0.25rem"}}>商品名 *</label>
               <input value={newItem.name} onChange={e => setNewItem(n=>({...n,name:e.target.value}))} placeholder="例: DAISOスマホケース"
@@ -102,7 +105,9 @@ export default function InventoryPage({ uid }) {
               <tr style={{background:"rgba(255,255,255,0.03)",borderBottom:"1px solid var(--rim)"}}>
                 <th style={{padding:"0.75rem 1rem",textAlign:"left",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>商品名</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>数量</th>
-                <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>単価</th>
+                <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>単価(¥)</th>
+                <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"#22c55e",fontSize:"0.65rem",textTransform:"uppercase"}}>仕入(₱)</th>
+                <th style={{padding:"0.75rem 1rem",textAlign:"left",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>SKU / 仕入先</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--orange)",fontSize:"0.65rem",textTransform:"uppercase"}}>在庫額</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"center",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>削除</th>
               </tr>
@@ -116,6 +121,11 @@ export default function InventoryPage({ uid }) {
                   </td>
                   <td style={{padding:"0.75rem 1rem",textAlign:"right"}}>{Number(item.qty).toLocaleString()}</td>
                   <td style={{padding:"0.75rem 1rem",textAlign:"right"}}>¥{Number(item.cost).toLocaleString()}</td>
+                  <td style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"#22c55e"}}>₱{Number(item.costPhp||0).toLocaleString()}</td>
+                  <td style={{padding:"0.75rem 1rem"}}>
+                    {item.sku&&<div style={{fontSize:"0.72rem",fontFamily:"monospace",color:"var(--dim2)"}}>{item.sku}</div>}
+                    {item.supplier&&<div style={{fontSize:"0.72rem",color:"var(--dim2)"}}>{item.supplier}</div>}
+                  </td>
                   <td style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--orange)"}}>¥{(Number(item.qty)*Number(item.cost)).toLocaleString()}</td>
                   <td style={{padding:"0.75rem 1rem",textAlign:"center"}}>
                     <button onClick={() => deleteItem(item.id)} style={{padding:"0.2rem 0.6rem",borderRadius:6,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.1)",color:"#ef4444",fontSize:"0.7rem",cursor:"pointer"}}>削除</button>
