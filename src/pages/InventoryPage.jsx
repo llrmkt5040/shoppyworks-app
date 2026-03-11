@@ -14,12 +14,15 @@ export default function InventoryPage({ uid }) {
 
   async function loadFxRate() {
     try {
-      const { db } = await import("../lib/firebase")
-      const { collection, getDocs } = await import("firebase/firestore")
-      const snap = await getDocs(collection(db, "fx_rates"))
-      if (!snap.empty) {
-        const latest = snap.docs.map(d=>d.data()).sort((a,b)=>(b.date||"").localeCompare(a.date||""))[0]
-        setFxRate(Number(latest.rate)||0)
+      const { db, auth } = await import("../lib/firebase")
+      const { doc, getDoc } = await import("firebase/firestore")
+      const uid = auth.currentUser?.uid
+      if (!uid) return
+      const snap = await getDoc(doc(db, "fx_rates", uid))
+      if (snap.exists()) {
+        const rate = Number(snap.data().rate_php_jpy) || 0
+        // rate_php_jpyは「₱1=¥○○」なので、¥→₱換算には使用
+        setFxRate(rate)
       }
     } catch(e) { console.warn("為替レート取得失敗", e) }
   }
