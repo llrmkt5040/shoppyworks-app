@@ -156,7 +156,6 @@ export default function AppLayout() {
             <span>👥 スタッフアクセス中：</span>
             <span style={{ fontWeight: 900 }}>{staffTarget.name}</span>
             <span style={{ opacity: 0.8 }}>({staffTarget.email}) のデータを表示しています</span>
-            <button onClick={() => setStaffTarget(null)} style={{ marginLeft: "auto", background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 6, padding: "0.15rem 0.5rem", fontSize: "0.65rem", cursor: "pointer", fontWeight: 700 }}>自分のデータに戻る</button>
           </div>
         )}
         <div style={{ height: 52, borderBottom: "1px solid var(--rim)", display: "flex", alignItems: "center", gap: "0.75rem", padding: "0 1.25rem", background: "var(--surface)", flexShrink: 0 }}>

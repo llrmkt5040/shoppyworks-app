@@ -407,8 +407,9 @@ function CashflowTab({ incomeData, cashflowItems, onAddExpense }) {
   )
 }
 
-export default function ShopeeManagerPage() {
+export default function ShopeeManagerPage({ uid: propUid }) {
   const { user } = useAuth()
+  const effectiveUid = propUid || effectiveUid
   const [tab, setTab] = useState("shipping")
   const [orders, setOrders] = useState([])
   const [inventoryItems, setInventoryItems] = useState([])
@@ -425,22 +426,22 @@ export default function ShopeeManagerPage() {
     if (!user) return
     const load = async () => {
       try {
-        const orderSnap = await getDocs(query(collection(db,"shopee_orders"),where("userId","==",user.uid)))
+        const orderSnap = await getDocs(query(collection(db,"shopee_orders"),where("userId","==",effectiveUid)))
         if (!orderSnap.empty) {
           const latest = orderSnap.docs.sort((a,b)=>(b.data().uploadedAt?.seconds||0)-(a.data().uploadedAt?.seconds||0))[0].data()
           setOrders(latest.orders||[]); setOrderFileName(latest.fileName||"")
         }
-        const incSnap = await getDocs(query(collection(db,"shopee_income"),where("userId","==",user.uid)))
+        const incSnap = await getDocs(query(collection(db,"shopee_income"),where("userId","==",effectiveUid)))
         if (!incSnap.empty) {
           const latest = incSnap.docs.sort((a,b)=>(b.data().uploadedAt?.seconds||0)-(a.data().uploadedAt?.seconds||0))[0].data()
           setIncomeData({ items:latest.items||[], summary:latest.summary||{} }); setIncomeFileName(latest.fileName||"")
         }
-        const cfSnap = await getDocs(query(collection(db,"cashflow_items"),where("userId","==",user.uid)))
+        const cfSnap = await getDocs(query(collection(db,"cashflow_items"),where("userId","==",effectiveUid)))
         // 在庫棚卸データ取得
-        const invSnap = await getDocs(query(collection(db,"inventory_items"),where("uid","==",user.uid)))
+        const invSnap = await getDocs(query(collection(db,"inventory_items"),where("uid","==",effectiveUid)))
         setInventoryItems(invSnap.docs.map(d=>({id:d.id,...d.data()})))
         // 為替レート取得
-        const fxSnap = await getDoc(doc(db,"fx_rates",user.uid))
+        const fxSnap = await getDoc(doc(db,"fx_rates",effectiveUid))
         if(fxSnap.exists()) setFxRate(Number(fxSnap.data().rate_php_jpy)||0)
         setCashflowItems(cfSnap.docs.map(d=>({id:d.id,...d.data()})))
       } catch(err) { console.error(err) }
@@ -451,7 +452,7 @@ export default function ShopeeManagerPage() {
   const handleOrderUpload = async (wb, fileName) => {
     const parsed = parseOrderXlsx(wb); setOrders(parsed); setOrderFileName(fileName)
     if (!user) return; setSaving(true)
-    try { await addDoc(collection(db,"shopee_orders"),{ userId:user.uid, fileName, orders:parsed.slice(0,500), uploadedAt:serverTimestamp() }) }
+    try { await addDoc(collection(db,"shopee_orders"),{ userId:effectiveUid, fileName, orders:parsed.slice(0,500), uploadedAt:serverTimestamp() }) }
     catch(err) { console.error(err) } finally { setSaving(false) }
   }
 
@@ -462,19 +463,19 @@ export default function ShopeeManagerPage() {
     if (!user) return
     setSaving(true)
     try {
-      await addDoc(collection(db,"shopee_income_released"),{ userId:user.uid, fileName, items:parsed.items.slice(0,300), summary:parsed.summary, uploadedAt:serverTimestamp() })
+      await addDoc(collection(db,"shopee_income_released"),{ userId:effectiveUid, fileName, items:parsed.items.slice(0,300), summary:parsed.summary, uploadedAt:serverTimestamp() })
     } catch(err) { console.error(err) } finally { setSaving(false) }
   }
 
   const handleIncomeUpload = async (wb, fileName) => {
     const parsed = parseIncomeXlsx(wb); setIncomeData(parsed); setIncomeFileName(fileName)
     if (!user) return; setSaving(true)
-    try { await addDoc(collection(db,"shopee_income"),{ userId:user.uid, fileName, items:parsed.items.slice(0,300), summary:parsed.summary, uploadedAt:serverTimestamp() }) }
+    try { await addDoc(collection(db,"shopee_income"),{ userId:effectiveUid, fileName, items:parsed.items.slice(0,300), summary:parsed.summary, uploadedAt:serverTimestamp() }) }
     catch(err) { console.error(err) } finally { setSaving(false) }
   }
 
   const handleAddExpense = async (item) => {
-    const newItem = {...item, userId:user?.uid, createdAt:serverTimestamp()}
+    const newItem = {...item, userId:effectiveUid, createdAt:serverTimestamp()}
     setCashflowItems(prev=>[...prev,newItem])
     if (!user) return
     try { await addDoc(collection(db,"cashflow_items"),newItem) } catch(err) { console.error(err) }
