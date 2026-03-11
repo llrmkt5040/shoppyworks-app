@@ -10,7 +10,7 @@ export default function InventoryPage({ uid }) {
   const [fxRate, setFxRate] = useState(0) // 為替レート(¥/₱)
   const [orderMap, setOrderMap] = useState({}) // SKU→出荷数マップ
 
-  useEffect(() => { loadItems(); loadOrderSkus(); loadFxRate(); loadOrderMap() }, [])
+  useEffect(() => { if(uid){ loadItems(); loadOrderSkus(); loadFxRate(); loadOrderMap(); loadSkuOptions() } }, [uid])
 
   async function loadFxRate() {
     try {
@@ -29,6 +29,20 @@ export default function InventoryPage({ uid }) {
         console.log("fx_rates: ドキュメントなし uid=", uid)
       }
     } catch(e) { console.warn("為替レート取得失敗", e) }
+  }
+
+  async function loadSkuOptions() {
+    try {
+      const { db } = await import("../lib/firebase")
+      const { collection, query, where, getDocs } = await import("firebase/firestore")
+      const snap = await getDocs(query(collection(db,"shopee_orders"),where("userId","==",uid)))
+      if (snap.empty) return
+      const latest = snap.docs.sort((a,b)=>(b.data().uploadedAt?.seconds||0)-(a.data().uploadedAt?.seconds||0))[0].data()
+      const orders = latest.orders || []
+      const skuMap = {}
+      orders.forEach(o => { if (o.sku) skuMap[o.sku] = o.product || "" })
+      setSkuOptions(Object.entries(skuMap).map(([sku, name]) => ({ sku, name })).sort((a,b)=>a.sku.localeCompare(b.sku)))
+    } catch(e) { console.error("SKU一覧取得エラー", e) }
   }
 
   async function loadOrderMap() {
