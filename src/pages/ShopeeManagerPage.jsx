@@ -245,10 +245,12 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
         // OrderID→SKUマップ（オーダーレポートから）
         const orderIdToSku = {}
         const orderIdToProduct = {}
+        const orderIdToQty = {}
         ;(orders||[]).forEach(o => {
           if (o.orderId && o.sku) {
             orderIdToSku[o.orderId] = o.sku
             orderIdToProduct[o.orderId] = o.product
+            orderIdToQty[o.orderId] = Number(o.qty) || 1
           }
         })
         // MyIncomeからSKU別売上集計（OrderIDで照合）
@@ -261,7 +263,7 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
           if (!skuSales[sku]) skuSales[sku] = { revenue: 0, toRelease: 0, qty: 0, productName }
           skuSales[sku].revenue += Number(item.originalPrice || 0)
           skuSales[sku].toRelease += Number(item.toRelease || 0)
-          skuSales[sku].qty += Number(item.qty || 1)
+          skuSales[sku].qty += orderIdToQty[orderId] || Number(item.qty) || 1
         })
         const rows = Object.entries(skuSales).map(([sku, s]) => {
           const inv = costMap[sku]
