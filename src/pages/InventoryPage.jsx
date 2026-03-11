@@ -174,6 +174,8 @@ export default function InventoryPage({ uid }) {
         costPhp: Number(editItem.costPhp)||0,
         sku: editItem.sku||"",
         supplier: editItem.supplier||"",
+        jan: editItem.jan||"",
+        origin: editItem.origin||"",
         memo: editItem.memo||"",
       })
       setEditItem(null)
