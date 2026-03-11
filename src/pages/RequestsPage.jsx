@@ -296,10 +296,12 @@ function ChatLog({ item, uid }) {
   async function loadLogs() {
     try {
       const { db } = await import("../lib/firebase")
-      const { collection, query, where, orderBy, getDocs } = await import("firebase/firestore")
-      const q = query(collection(db, "pasabuy_logs"), where("requestId","==",item.id), orderBy("createdAt","asc"))
+      const { collection, query, where, getDocs } = await import("firebase/firestore")
+      const q = query(collection(db, "pasabuy_logs"), where("requestId","==",item.id))
       const snap = await getDocs(q)
-      setLogs(snap.docs.map(d => ({ id:d.id, ...d.data() })))
+      const list = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+      list.sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""))
+      setLogs(list)
     } catch(e) { console.error(e) }
   }
 
