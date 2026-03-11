@@ -231,8 +231,7 @@ export default function InventoryPage({ uid }) {
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>数量</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>単価(¥)</th>
                 <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"#22c55e",fontSize:"0.65rem",textTransform:"uppercase"}}>仕入(₱)</th>
-                <th style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--orange)",fontSize:"0.65rem",textTransform:"uppercase"}}>在庫額</th>
-                <th style={{padding:"0.75rem 1rem",textAlign:"center",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>削除</th>
+                <th style={{padding:"0.75rem 1rem",textAlign:"center",fontWeight:700,color:"var(--dim2)",fontSize:"0.65rem",textTransform:"uppercase"}}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -251,7 +250,6 @@ export default function InventoryPage({ uid }) {
                   <td style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"#22c55e"}}>
                     {Number(item.costPhp||0) > 0 ? `₱${Number(item.costPhp).toLocaleString()}` : <span style={{color:"var(--dim2)",fontSize:"0.72rem"}}>未登録</span>}
                   </td>
-                  <td style={{padding:"0.75rem 1rem",textAlign:"right",fontWeight:700,color:"var(--orange)"}}>¥{(Number(item.qty)*Number(item.cost)).toLocaleString()}</td>
                   <td style={{padding:"0.75rem 1rem",textAlign:"center"}}>
                     <div style={{display:"flex",gap:4,justifyContent:"center"}}>
                       <button onClick={()=>setEditItem({...item})} style={{padding:"0.2rem 0.6rem",borderRadius:6,border:"1px solid rgba(59,130,246,0.3)",background:"rgba(59,130,246,0.1)",color:"#3b82f6",fontSize:"0.7rem",cursor:"pointer"}}>編集</button>
