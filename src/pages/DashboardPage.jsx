@@ -9,6 +9,8 @@ export default function DashboardPage({ uid: propUid }) {
   const [loading, setLoading] = useState(true)
   const [diaryLogs, setDiaryLogs] = useState([])
   const [fxRate, setFxRate] = useState(1)
+  const [monthlyDiarySales, setMonthlyDiarySales] = useState({ php: 0, jpy: 0, days: 0 })
+  const [todayDiarySales, setTodayDiarySales] = useState({ php: 0, jpy: 0 })
   const dropRef = useRef()
   const [tab, setTab] = useState('today')
 
@@ -58,12 +60,25 @@ export default function DashboardPage({ uid: propUid }) {
     // ShopeeDiaryログも取得
     try {
       const snap2 = await getDocs(collection(db, 'action_logs'))
-      const logs = snap2.docs
+      const uid2 = propUid || auth.currentUser?.uid || 'anonymous'
+      const allLogs = snap2.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(d => d.uid === (propUid || propUid || auth.currentUser?.uid || 'anonymous'))
+        .filter(d => d.uid === uid2)
         .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-        .slice(0, 30)
-      setDiaryLogs(logs)
+      setDiaryLogs(allLogs.slice(0, 30))
+      // 今月の集計
+      const nowStr = new Date().toISOString().slice(0, 7) // 'YYYY-MM'
+      const todayStr2 = new Date().toISOString().slice(0, 10)
+      const monthLogs = allLogs.filter(l => (l.date || '').startsWith(nowStr))
+      const monthPhp = monthLogs.reduce((s, l) => s + (Number(l.sales_php) || 0), 0)
+      const monthJpy = monthLogs.reduce((s, l) => s + (Number(l.sales_jpy) || 0), 0)
+      setMonthlyDiarySales({ php: monthPhp, jpy: monthJpy, days: monthLogs.length })
+      // 当日
+      const todayLog = allLogs.find(l => l.date === todayStr2)
+      setTodayDiarySales({
+        php: Number(todayLog?.sales_php) || 0,
+        jpy: Number(todayLog?.sales_jpy) || 0,
+      })
     } catch(e) { console.error('diary fetch error:', e) }
     // 為替レート取得
     try {
@@ -330,7 +345,8 @@ export default function DashboardPage({ uid: propUid }) {
                 {/* KPIカード */}
                 {latest && (
                   <KpiCards items={[
-                    { l:'最新売上 (¥)', v:'¥'+Math.round((latest.kpis?.totalSales||0)*fxRate).toLocaleString(), a:'var(--orange)', sub:'₱'+(latest.kpis?.totalSales||0).toLocaleString('en',{maximumFractionDigits:0}) },
+                    { l:'当日売上', v: todayDiarySales.jpy ? '¥'+todayDiarySales.jpy.toLocaleString() : todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: todayDiarySales.jpy && todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '' },
+                    { l:'今月累計（Diary）', v:'¥'+Math.round(monthlyDiarySales.jpy || monthlyDiarySales.php * fxRate).toLocaleString(), a:'#f59e0b', sub:'₱'+Math.round(monthlyDiarySales.php).toLocaleString()+' / '+monthlyDiarySales.days+'日分' },
                     { l:'商品数', v:(latest.kpis?.productCount||0)+'件', a:'var(--purple)' },
                     { l:'平均CTR', v:(latest.kpis?.avgCtr||0).toFixed(2)+'%', a:(latest.kpis?.avgCtr||0)>3?'var(--green)':'var(--yellow)' },
                     { l:'平均CVR', v:(latest.kpis?.avgCvr||0).toFixed(2)+'%', a:(latest.kpis?.avgCvr||0)>5?'var(--green)':(latest.kpis?.avgCvr||0)<3?'var(--red)':'var(--yellow)' },
