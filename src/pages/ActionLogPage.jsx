@@ -93,26 +93,35 @@ export default function ActionLogPage() {
   async function fetchRate() {
     setRateLoading(true)
     try {
-      const res = await fetch("https://open.er-api.com/v6/latest/PHP")
+      // USD経由で正確なレートを計算（₱→USD→¥、Payoneer手数料2%引き）
+      const res = await fetch("https://open.er-api.com/v6/latest/USD")
       const json = await res.json()
-      const rate = json?.rates?.JPY
-      if (rate) {
+      const usdJpy = json?.rates?.JPY
+      const usdPhp = json?.rates?.PHP
+      if (usdJpy && usdPhp) {
+        // ₱1 = (1/usdPhp) × usdJpy × 0.98（手数料2%引き）
+        const rate = (1 / usdPhp) * usdJpy * 0.98
         const rateStr = rate.toFixed(4)
         setForm(f => ({ ...f, rate_php_jpy: rateStr }))
-        // Firestoreに保存
         await setDoc(doc(db, "fx_rates", auth.currentUser?.uid), {
           rate_php_jpy: rateStr,
+          usd_jpy: usdJpy.toFixed(4),
+          usd_php: usdPhp.toFixed(4),
           updatedAt: new Date().toISOString()
         })
       } else {
-        const res2 = await fetch("https://api.frankfurter.app/latest?from=PHP&to=JPY")
+        const res2 = await fetch("https://api.frankfurter.app/latest?from=USD&to=JPY,PHP")
         const json2 = await res2.json()
-        const rate2 = json2?.rates?.JPY
-        if (rate2) {
+        const usdJpy2 = json2?.rates?.JPY
+        const usdPhp2 = json2?.rates?.PHP
+        if (usdJpy2 && usdPhp2) {
+          const rate2 = (1 / usdPhp2) * usdJpy2 * 0.98
           const rateStr = rate2.toFixed(4)
           setForm(f => ({ ...f, rate_php_jpy: rateStr }))
           await setDoc(doc(db, "fx_rates", auth.currentUser?.uid), {
             rate_php_jpy: rateStr,
+            usd_jpy: usdJpy2.toFixed(4),
+            usd_php: usdPhp2.toFixed(4),
             updatedAt: new Date().toISOString()
           })
         } else alert("レート取得失敗。手動で入力してください。")
