@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import NoticePage from "../pages/NoticePage"
+import ManualPage from "../pages/ManualPage"
 import { auth, db } from "../lib/firebase"
 import { onAuthStateChanged, signOut } from "firebase/auth"
 import { collection, getDocs, doc, getDoc } from "firebase/firestore"
@@ -16,8 +17,9 @@ import SettingsPage from "../pages/SettingsPage"
 
 const NAV = [
   { id: "dashboard",     icon: "📈", label: "Dashboard",            sub: "数値管理",   section: null },
-  { id: "notice",        icon: "📢", label: "お知らせ",                sub: "更新・予定"  },
-  { id: "_daily",        icon: "",    label: "日次業務",                sub: "",           section: "header" },
+  { id: "notice",        icon: "📢", label: "お知らせ",                sub: "更新・予定",  section: null },
+  { id: "manual",        icon: "📖", label: "マニュアル",               sub: "準備中",      section: null },
+  { id: "_daily",        icon: "",    label: "日次業務",                sub: "",            section: "header" },
   { id: "actionlog",     icon: "📅", label: "ShopeeDiary",             sub: "日次記録"   },
   { id: "analyzer",      icon: "📊", label: "ShopeeAnalyzer",          sub: "商品分析"   },
   { id: "shopee",        icon: "📂", label: "ShopeeManager",           sub: "注文管理"   },
@@ -102,6 +104,7 @@ export default function AppLayout() {
     switch (page) {
       case "dashboard": return <DashboardPage uid={uid} />
       case "notice":    return <NoticePage />
+      case "manual":    return <ManualPage />
       case "analyzer":  return <AnalyzerPage uid={uid} onNavigate={setPage} />
       case "actionlog": return <ActionLogPage uid={uid} />
       case "inventory": return <InventoryPage uid={uid} />
@@ -126,7 +129,7 @@ export default function AppLayout() {
         <nav style={{ flex: 1, padding: "0.75rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.25rem", overflowY: "auto" }}>
           {NAV.map(n => {
             // セクションヘッダー
-            if (n.section === 'header') {
+            if (n.id.startsWith('_')) {
               return sideOpen ? (
                 <div key={n.id} style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--dim2)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0.75rem 0.75rem 0.25rem', opacity: 0.6 }}>
                   {n.label}
