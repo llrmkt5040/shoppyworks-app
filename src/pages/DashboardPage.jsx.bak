@@ -328,9 +328,6 @@ export default function DashboardPage({ uid: propUid }) {
                   ]} />
                 )}
 
-                {/* 今月の目標ペース */}
-                <GoalPaceBlock uid={propUid || auth.currentUser?.uid} latest={latest} />
-
                 {/* ShopeeDiary最新ログ */}
                 {diaryLogs.length > 0 && (
                   <div className="card" style={{ padding:'1.1rem', marginTop:'0.5rem' }}>
@@ -421,76 +418,6 @@ export default function DashboardPage({ uid: propUid }) {
 
           </div>
         )}
-      </div>
-    </div>
-  )
-}
-
-function GoalPaceBar({ label, unit, color, actual, target, daysElapsed, daysInMonth }) {
-  if (!target || parseFloat(target) === 0 || actual === null || actual === undefined) return null
-  const targetNum = parseFloat(target)
-  const expectedPct = Math.round((daysElapsed / daysInMonth) * 100)
-  const actualPct = Math.min(Math.round((actual / targetNum) * 100), 999)
-  const paceOk = actualPct >= expectedPct - 5
-  const statusColor = actualPct >= 100 ? 'var(--green)' : paceOk ? 'var(--yellow)' : 'var(--red)'
-  const statusIcon = actualPct >= 100 ? '🎉' : paceOk ? '🟡' : '🔴'
-  const fmt = (v) => unit === '₱' ? '₱' + Math.round(v).toLocaleString() : v.toFixed(2) + unit
-  return (
-    <div style={{ marginBottom:'0.6rem' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.25rem' }}>
-        <span style={{ fontSize:'0.68rem', fontWeight:700, color:'var(--dim2)' }}>{statusIcon} {label}</span>
-        <span style={{ fontSize:'0.68rem', fontWeight:700, color: statusColor }}>
-          {fmt(actual)} / {fmt(targetNum)}　{actualPct}%
-        </span>
-      </div>
-      <div style={{ position:'relative', height:6, borderRadius:3, background:'var(--rim)', overflow:'hidden' }}>
-        <div style={{ position:'absolute', height:'100%', width: Math.min(actualPct,100)+'%', background: statusColor, borderRadius:3, transition:'width 0.6s' }} />
-        <div style={{ position:'absolute', top:0, bottom:0, left: expectedPct+'%', width:2, background:'rgba(255,255,255,0.4)', borderRadius:1 }} />
-      </div>
-      <div style={{ fontSize:'0.6rem', color:'var(--dim2)', marginTop:'0.2rem', textAlign:'right' }}>
-        今日時点の期待値: {expectedPct}%
-      </div>
-    </div>
-  )
-}
-
-function GoalPaceBlock({ uid, latest }) {
-  const [goals, setGoals] = useState(null)
-  useEffect(() => { if (uid) load() }, [uid])
-  async function load() {
-    try {
-      const { db } = await import('../lib/firebase')
-      const { doc, getDoc } = await import('firebase/firestore')
-      const snap = await getDoc(doc(db, 'user_goals', uid))
-      if (snap.exists()) setGoals(snap.data())
-    } catch(e) {}
-  }
-  const now = new Date()
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate()
-  const daysElapsed = now.getDate()
-  const thisMonth = goals?.thismonth || {}
-  const hasAnyGoal = Object.values(thisMonth).some(v => v && parseFloat(v) > 0)
-  if (!goals || !hasAnyGoal || !latest) return null
-  const GOAL_KEYS = [
-    { key:'sales',  label:'月間売上',   unit:'₱', actual: latest.kpis?.totalSales },
-    { key:'orders', label:'月間受注数', unit:'件', actual: latest.kpis?.totalOrders },
-    { key:'ctr',    label:'CTR',       unit:'%',  actual: latest.kpis?.avgCtr },
-    { key:'cvr',    label:'CVR',       unit:'%',  actual: latest.kpis?.avgCvr },
-  ]
-  const targets = GOAL_KEYS.filter(g => thisMonth[g.key] && parseFloat(thisMonth[g.key]) > 0)
-  if (targets.length === 0) return null
-  return (
-    <div className="card" style={{ padding:'1.25rem', marginBottom:'1rem', borderTop:'2px solid var(--orange)' }}>
-      <div style={{ fontSize:'0.65rem', fontWeight:700, color:'var(--orange)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>
-        🏆 今月の目標ペース　<span style={{ color:'var(--dim2)', fontWeight:400 }}>{daysElapsed}日経過 / {daysInMonth}日</span>
-      </div>
-      {targets.map(g => (
-        <GoalPaceBar key={g.key} label={g.label} unit={g.unit} color={g.color}
-          actual={g.actual} target={thisMonth[g.key]}
-          daysElapsed={daysElapsed} daysInMonth={daysInMonth} />
-      ))}
-      <div style={{ marginTop:'0.75rem', fontSize:'0.65rem', color:'var(--dim2)', textAlign:'right' }}>
-        目標は <span style={{ color:'var(--orange)', cursor:'pointer', textDecoration:'underline' }} onClick={() => {}}>🏆 目標管理</span> タブで変更できます
       </div>
     </div>
   )
