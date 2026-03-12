@@ -27,6 +27,7 @@ export default function MassUpdatePage({ uid: propUid }) {
   const [search, setSearch] = useState('')
   const [inventory, setInventory] = useState([]) // 在庫棚卸データ
   const [editMap, setEditMap] = useState({}) // productId→編集データ
+  const [aiLoading, setAiLoading] = useState({})
 
   const uid = propUid || auth.currentUser?.uid
 
@@ -132,6 +133,65 @@ export default function MassUpdatePage({ uid: propUid }) {
     setLoading(false)
   }
 
+
+  async function aiCompleteSingle(productId, name, sku, failReason) {
+    setAiLoading(prev => ({ ...prev, [productId]: true }))
+    try {
+      const prompt = `以下のShopee商品情報から、不足している情報を推定してJSON形式で返してください。
+
+商品名: ${name}
+SKU: ${sku}
+${failReason ? 'Fail Reason: ' + failReason : ''}
+
+以下の形式でJSONのみ返してください（説明文不要）:
+{
+  "jan": "JANコード（わからなければ空文字）",
+  "origin": "原産国（例: Japan, China, Korea）",
+  "weight": "重量グラム数（数字のみ、わからなければ空文字）",
+  "brand": "ブランド名（わからなければ空文字）",
+  "category": "Shopeeカテゴリ（例: Health & Beauty, Home & Living）",
+  "fix": "${failReason ? 'Fail Reasonの修正案（日本語で簡潔に）' : ''}"
+}`
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
+      const data = await res.json()
+      const text = data.content?.[0]?.text || '{}'
+      const clean = text.replace(/```json|```/g, '').trim()
+      const parsed = JSON.parse(clean)
+      setEditMap(prev => ({
+        ...prev,
+        [productId]: {
+          ...prev[productId],
+          ...(parsed.jan && { jan: parsed.jan }),
+          ...(parsed.origin && { origin: parsed.origin }),
+          ...(parsed.weight && { weight: parsed.weight }),
+          ...(parsed.brand && { brand: parsed.brand }),
+          ...(parsed.category && { category: parsed.category }),
+          ...(parsed.fix && { aiFixSuggestion: parsed.fix }),
+        }
+      }))
+    } catch(e) { alert('AI補完エラー: ' + e.message) }
+    setAiLoading(prev => ({ ...prev, [productId]: false }))
+  }
+
+  async function aiCompleteAll() {
+    const targets = filteredProducts.slice(0, 20)
+    if (!window.confirm(`表示中の${targets.length}件にAI補完を実行します（時間がかかります）`)) return
+    for (const p of targets) {
+      await aiCompleteSingle(p.productId, p.name, p.sku, p.failReason)
+      await new Promise(r => setTimeout(r, 500))
+    }
+    alert('✅ 一括AI補完完了！')
+  }
+
   async function downloadXlsx() {
     const { utils, writeFile } = await import('xlsx')
     const rows = [
@@ -230,6 +290,7 @@ export default function MassUpdatePage({ uid: propUid }) {
                 </button>
               ))}
               <button onClick={autoFillFromInventory} style={{ padding: '0.4rem 0.9rem', borderRadius: 8, border: '1px solid var(--green)', background: 'rgba(22,163,74,0.1)', color: 'var(--green)', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700 }}>🔗 在庫から自動補完</button>
+              <button onClick={aiCompleteAll} style={{ padding: '0.4rem 0.9rem', borderRadius: 8, border: '1px solid var(--ai)', background: 'rgba(139,92,246,0.1)', color: 'var(--ai)', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700 }}>🤖 一括AI補完（最大20件）</button>
               <button onClick={downloadXlsx} style={{ padding: '0.4rem 0.9rem', borderRadius: 8, border: 'none', background: 'var(--orange)', color: '#fff', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700 }}>⬇ XLSXダウンロード</button>
               <span style={{ fontSize: '0.72rem', color: 'var(--dim2)' }}>{filteredProducts.length}件</span>
             </div>
@@ -246,12 +307,16 @@ export default function MassUpdatePage({ uid: propUid }) {
                         <div style={{ fontSize: '0.78rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
                         <div style={{ fontSize: '0.63rem', color: 'var(--dim2)' }}>ID: {p.productId}　SKU: {p.sku}</div>
                         {p.hasError && <div style={{ fontSize: '0.65rem', color: 'var(--red)', fontWeight: 700 }}>⚠ {p.failReason}</div>}
+                        {e.aiFixSuggestion && <div style={{ fontSize: '0.63rem', color: 'var(--ai)', marginTop: '0.2rem' }}>💡 {e.aiFixSuggestion}</div>}
                       </div>
                       <select value={e.skuClass || sc} onChange={ev => setEdit(p.productId, 'skuClass', ev.target.value)} style={{ fontSize: '0.68rem', background: 'var(--surface)', border: '1px solid var(--rim)', color: 'var(--text)', borderRadius: 6, padding: '0.2rem' }}>
                         <option value="instock">有在庫</option>
                         <option value="nostock">無在庫</option>
                         <option value="pasabuy">Pasabuy</option>
                       </select>
+                      <button onClick={() => aiCompleteSingle(p.productId, p.name, p.sku, p.failReason)} disabled={aiLoading[p.productId]} style={{ padding: '0.25rem 0.6rem', borderRadius: 6, border: '1px solid var(--ai)', background: aiLoading[p.productId] ? 'rgba(139,92,246,0.05)' : 'rgba(139,92,246,0.1)', color: 'var(--ai)', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {aiLoading[p.productId] ? '⏳' : '🤖 AI補完'}
+                      </button>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: '0.5rem' }}>
                       {[
