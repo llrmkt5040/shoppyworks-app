@@ -354,7 +354,8 @@ export default function DashboardPage({ uid: propUid }) {
             {/* 日次（前日）タブ */}
             {tab === 'yesterday' && (
               <div className="fade-up">
-                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>📅 前回との差分</div>
+                <GoalAchievementBlock uid={propUid || auth.currentUser?.uid} latest={latest} label="前日" />
+                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1rem 0' }}>📅 前回との差分</div>
                 {histories.length < 2 ? (
                   <div style={{ textAlign:'center', padding:'3rem', color:'var(--dim2)', fontSize:'0.85rem', border:'1px solid var(--rim)', borderRadius:12 }}>2件以上のデータが必要です</div>
                 ) : (
