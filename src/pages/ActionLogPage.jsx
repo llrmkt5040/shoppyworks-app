@@ -220,15 +220,15 @@ export default function ActionLogPage() {
           <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
             <div style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>📊 アクセス・転換率 <span style={{fontSize:"0.6rem",color:"var(--dim2)",fontWeight:400,textTransform:"none"}}>Key Metrics</span></div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
-              <Field label="Visitors（訪問者数）" icon="👥" value={form.visitors} onChange={e => set("visitors", e.target.value)} />
-              <Field label="Product Clicks（クリック数）" icon="🖱️" value={form.clicks} onChange={e => set("clicks", e.target.value)} />
-              <Field label="Sales per Order ₱（SPO）" icon="📍" value={form.spo} onChange={e => set("spo", e.target.value)} />
               <div>
                 <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>📊 Order Conversion Rate（OCR %）</label>
                 <input type="number" value={form.ocr} onChange={e => set("ocr", e.target.value)} placeholder="0"
                   style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.9rem",boxSizing:"border-box"}} />
                 <div style={{fontSize:"0.65rem",color:"var(--dim)",marginTop:"0.2rem"}}>Order Conversion Rate</div>
               </div>
+              <Field label="Visitors（訪問者数）" icon="👥" value={form.visitors} onChange={e => set("visitors", e.target.value)} />
+              <Field label="Product Clicks（クリック数）" icon="🖱️" value={form.clicks} onChange={e => set("clicks", e.target.value)} />
+              <Field label="Sales per Order ₱（SPO）" icon="📍" value={form.spo} onChange={e => set("spo", e.target.value)} />
               <Field label="CV（注文転換数）" icon="📈" value={form.cv} onChange={e => set("cv", e.target.value)} />
             </div>
           </div>
@@ -243,6 +243,12 @@ export default function ActionLogPage() {
           </div>
 
           <Section title="フォロー・評価">
+            <div>
+              <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>🔗 ショップURL</label>
+              <input type="url" value={form.shop_url||""} onChange={e => set("shop_url", e.target.value)} placeholder="https://shopee.ph/your-shop"
+                style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.9rem",boxSizing:"border-box"}} />
+              {form.shop_url && <a href={form.shop_url} target="_blank" rel="noreferrer" style={{fontSize:"0.68rem",color:"var(--orange)",marginTop:"0.3rem",display:"block"}}>→ ショップを開く</a>}
+            </div>
             <Field label="Followers（フォロワー数）" icon="❤️" value={form.followers} onChange={e => set("followers", e.target.value)} note="Shopeeショップページの数値" />
             <Field label="評価数" icon="⭐" value={form.rating_stars} onChange={e => set("rating_stars", e.target.value)} />
             <Field label="評価スコア" icon="🌟" value={form.rating} onChange={e => set("rating", e.target.value)} />
@@ -250,6 +256,7 @@ export default function ActionLogPage() {
           <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
             <div style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>🎁 Voucher</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
+              <div style={{gridColumn:"1/-1",fontSize:"0.65rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",letterSpacing:"0.08em"}}>🆕 New Buyer</div>
               <Field label="New Buyer 配布枚数" icon="🆕" value={form.voucher_new_buyer} onChange={e => set("voucher_new_buyer", e.target.value)} />
               <Field label="New Buyer 利用回数" icon="📱" value={form.usage_new_buyer} onChange={e => set("usage_new_buyer", e.target.value)} />
               <div>
@@ -260,6 +267,7 @@ export default function ActionLogPage() {
                     : "-"
                 } style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"rgba(255,255,255,0.03)",color:"var(--orange)",fontSize:"0.9rem",boxSizing:"border-box",fontWeight:700}} />
               </div>
+              <div style={{gridColumn:"1/-1",borderTop:"1px solid var(--rim)",paddingTop:"0.5rem",fontSize:"0.65rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",letterSpacing:"0.08em"}}>🔄 Repeat Buyer</div>
               <Field label="Repeat Buyer 配布枚数" icon="🔄" value={form.voucher_repeat_buyer} onChange={e => set("voucher_repeat_buyer", e.target.value)} />
               <Field label="Repeat Buyer 利用回数" icon="📱" value={form.usage_repeat_buyer} onChange={e => set("usage_repeat_buyer", e.target.value)} />
               <div>
@@ -270,6 +278,7 @@ export default function ActionLogPage() {
                     : "-"
                 } style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"rgba(255,255,255,0.03)",color:"var(--orange)",fontSize:"0.9rem",boxSizing:"border-box",fontWeight:700}} />
               </div>
+              <div style={{gridColumn:"1/-1",borderTop:"1px solid var(--rim)",paddingTop:"0.5rem",fontSize:"0.65rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",letterSpacing:"0.08em"}}>🎁 Follow Prize</div>
               <Field label="FollowPrize 配布枚数" icon="🎁" value={form.follow_prize} onChange={e => set("follow_prize", e.target.value)} />
               <Field label="FollowPrize 利用回数" icon="📱" value={form.usage} onChange={e => set("usage", e.target.value)} />
               <div>

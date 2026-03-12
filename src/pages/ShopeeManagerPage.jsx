@@ -128,9 +128,11 @@ function ShippingTab({ orders, onUpload, fileName }) {
   const totalRevenue = orders.filter(o=>o.status!=="Cancelled").reduce((s,o)=>s+o.total,0)
   const cancelRate = orders.length ? ((counts["Cancelled"]||0)/orders.length*100).toFixed(1) : "0.0"
   if (orders.length===0) return <UploadArea label="注文レポート XLSX（Order_all_xxxx.xlsx）" onUpload={onUpload} uploaded={false} fileName={fileName} />
-  // データあり時も再アップロード可能
   return (
     <div>
+      <div style={{ marginBottom:12 }}>
+        <UploadArea label={`再アップロード（現在: ${fileName||"未アップロード"}）`} onUpload={onUpload} uploaded={true} fileName={fileName} />
+      </div>
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
         <KpiCard icon="📦" label="総注文数" value={`${orders.length}件`} color="#3b82f6" />
         <KpiCard icon="⚡" label="出荷待ち" value={`${counts["To ship"]||0}件`} color="#eab308" />
