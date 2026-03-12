@@ -8,6 +8,7 @@ export default function DashboardPage({ uid: propUid }) {
   const [histories, setHistories] = useState([])
   const [loading, setLoading] = useState(true)
   const [diaryLogs, setDiaryLogs] = useState([])
+  const [fxRate, setFxRate] = useState(1)
   const dropRef = useRef()
   const [tab, setTab] = useState('today')
 
@@ -64,6 +65,15 @@ export default function DashboardPage({ uid: propUid }) {
         .slice(0, 30)
       setDiaryLogs(logs)
     } catch(e) { console.error('diary fetch error:', e) }
+    // 為替レート取得
+    try {
+      const { doc, getDoc } = await import('firebase/firestore')
+      const uid = propUid || auth.currentUser?.uid
+      if (uid) {
+        const fxSnap = await getDoc(doc(db, 'fx_rates', uid))
+        if (fxSnap.exists()) setFxRate(Number(fxSnap.data().rate_php_jpy) || 1)
+      }
+    } catch(e) { console.error('fx_rates fetch error:', e) }
     setLoading(false)
   }
 
@@ -166,6 +176,7 @@ export default function DashboardPage({ uid: propUid }) {
           <div key={k.l} className="card" style={{ padding:'1.25rem', borderTop:'2px solid '+k.a }}>
             <div style={{ fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.4rem' }}>{k.l}</div>
             <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.9rem', color:k.a, lineHeight:1 }}>{k.v}</div>
+            {k.sub && <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.2rem' }}>{k.sub}</div>}
             {k.d !== undefined && <div style={{ marginTop:'0.3rem', fontSize:'0.68rem', color:'var(--dim2)' }}>前回比 <DiffBadge value={k.d} reverse={k.reverse} fmt={k.fmt} /></div>}
           </div>
         ))}
@@ -319,7 +330,7 @@ export default function DashboardPage({ uid: propUid }) {
                 {/* KPIカード */}
                 {latest && (
                   <KpiCards items={[
-                    { l:'最新売上', v:'₱'+(latest.kpis?.totalSales||0).toLocaleString('en',{maximumFractionDigits:0}), a:'var(--orange)' },
+                    { l:'最新売上 (¥)', v:'¥'+Math.round((latest.kpis?.totalSales||0)*fxRate).toLocaleString(), a:'var(--orange)', sub:'₱'+(latest.kpis?.totalSales||0).toLocaleString('en',{maximumFractionDigits:0}) },
                     { l:'商品数', v:(latest.kpis?.productCount||0)+'件', a:'var(--purple)' },
                     { l:'平均CTR', v:(latest.kpis?.avgCtr||0).toFixed(2)+'%', a:(latest.kpis?.avgCtr||0)>3?'var(--green)':'var(--yellow)' },
                     { l:'平均CVR', v:(latest.kpis?.avgCvr||0).toFixed(2)+'%', a:(latest.kpis?.avgCvr||0)>5?'var(--green)':(latest.kpis?.avgCvr||0)<3?'var(--red)':'var(--yellow)' },
