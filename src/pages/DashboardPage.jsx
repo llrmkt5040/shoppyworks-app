@@ -571,13 +571,8 @@ function GoalPaceBlock({ uid, latest }) {
   const thisMonth = goals?.thismonth || {}
   const hasAnyGoal = Object.values(thisMonth).some(v => v && parseFloat(v) > 0)
   if (!goals || !hasAnyGoal || !latest) return null
-  // Diary月次累計を優先、なければXLSX×レート
-  const effectiveFxRate = fxRateOverride || fxRate
-  const salesJpy = monthlyDiarySales?.jpy
-    ? monthlyDiarySales.jpy
-    : monthlyDiarySales?.php
-    ? monthlyDiarySales.php * effectiveFxRate
-    : (latest.kpis?.totalSales || 0) * effectiveFxRate
+  // ₱実績を¥換算
+  const salesJpy = (latest.kpis?.totalSales || 0) * fxRate
   const GOAL_KEYS = [
     { key:'sales',  label:'月間売上',   unit:'¥', actual: salesJpy },
     { key:'orders', label:'月間受注数', unit:'件', actual: latest.kpis?.totalOrders },
@@ -590,7 +585,7 @@ function GoalPaceBlock({ uid, latest }) {
     <div className="card" style={{ padding:'1.25rem', marginBottom:'1rem', borderTop:'2px solid var(--orange)' }}>
       <div style={{ fontSize:'0.65rem', fontWeight:700, color:'var(--orange)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>
         🏆 今月の目標ペース　<span style={{ color:'var(--dim2)', fontWeight:400 }}>{daysElapsed}日経過 / {daysInMonth}日　</span>
-        <span style={{ color:'var(--dim2)', fontWeight:400 }}>💱 ₱1=¥{effectiveFxRate}</span>
+        <span style={{ color:'var(--dim2)', fontWeight:400 }}>💱 ₱1=¥{fxRate}</span>
       </div>
       {targets.map(g => (
         <GoalPaceBar key={g.key} label={g.label} unit={g.unit} color={g.color}
