@@ -10,11 +10,12 @@ export default function DashboardPage({ uid: propUid }) {
   const [diaryLogs, setDiaryLogs] = useState([])
   const [fxRate, setFxRate] = useState(1)
   const [shopeeOrders, setShopeeOrders] = useState({ total: 0, month: 0, cancelled: 0, toShip: 0, monthRevenue: 0 })
+  const [inventoryCost, setInventoryCost] = useState(0)
   const [shopeeIncome, setShopeeIncome] = useState({ unreleased: 0, released: 0 })
   const [monthlyDiarySales, setMonthlyDiarySales] = useState({ php: 0, jpy: 0, days: 0 })
   const [todayDiarySales, setTodayDiarySales] = useState({ php: 0, jpy: 0 })
   const dropRef = useRef()
-  const [tab, setTab] = useState('today')
+  const [tab, setTab] = useState('yesterday')
 
   useEffect(() => { if (propUid || auth.currentUser?.uid) loadData() }, [propUid])
 
@@ -70,16 +71,28 @@ export default function DashboardPage({ uid: propUid }) {
       setDiaryLogs(allLogs.slice(0, 30))
       // 今月の集計
       const nowStr = new Date().toISOString().slice(0, 7) // 'YYYY-MM'
-      const todayStr2 = new Date().toISOString().slice(0, 10)
+      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
+      const todayStr2 = yesterday.toISOString().slice(0, 10)
       const monthLogs = allLogs.filter(l => (l.date || '').startsWith(nowStr))
       const monthPhp = monthLogs.reduce((s, l) => s + (Number(l.sales_php) || 0), 0)
       const monthJpy = monthLogs.reduce((s, l) => s + (Number(l.sales_jpy) || 0), 0)
       setMonthlyDiarySales({ php: monthPhp, jpy: monthJpy, days: monthLogs.length })
       // 当日
       const todayLog = allLogs.find(l => l.date === todayStr2)
+      const visitors = Number(todayLog?.visitors) || 0
+      const clicks   = Number(todayLog?.clicks)   || 0
+      const orders   = Number(todayLog?.orders)   || 0
+      const cvr = visitors > 0 ? (orders / visitors * 100) : 0
       setTodayDiarySales({
         php: Number(todayLog?.sales_php) || 0,
         jpy: Number(todayLog?.sales_jpy) || 0,
+        orders,
+        cancelled: Number(todayLog?.cancelled) || 0,
+        ocr: Number(todayLog?.ocr) || 0,
+        followers: Number(todayLog?.followers) || 0,
+        visitors,
+        clicks,
+        cvr: Math.round(cvr * 100) / 100,
       })
     } catch(e) { console.error('diary fetch error:', e) }
     // ShopeeManagerデータ取得
@@ -91,14 +104,34 @@ export default function DashboardPage({ uid: propUid }) {
       const ordSnap = await getDocs(collection(db, 'shopee_orders'))
       const ordDocs = ordSnap.docs.map(d => d.data()).filter(d => d.userId === uid3)
       const allOrders = ordDocs.flatMap(d => d.orders || [])
+
       const monthOrders = allOrders.filter(o => (o.orderDate || '').startsWith(nowStr2))
       const monthRevenue = monthOrders.filter(o => o.status !== 'Cancelled').reduce((s, o) => s + (Number(o.total) || 0), 0)
+      // 前日分
+      const ydayDate = new Date(); ydayDate.setDate(ydayDate.getDate() - 1)
+      const ydayStr = ydayDate.toISOString().slice(0, 10)
+      const ydayOrders = allOrders.filter(o => (o.orderDate || '').startsWith(ydayStr))
+      const ydayRevenue = ydayOrders.filter(o => o.status !== 'Cancelled').reduce((s, o) => s + (Number(o.total) || 0), 0)
+      const ydayCancelled = ydayOrders.filter(o => o.status === 'Cancelled').length
+      // 売れた商品TOP5（前日）
+      const productMap = {}
+      ydayOrders.filter(o => o.status !== 'Cancelled').forEach(o => {
+        const name = o.productName || o.name || '不明'
+        if (!productMap[name]) productMap[name] = { name, qty: 0, revenue: 0 }
+        productMap[name].qty += Number(o.quantity) || 1
+        productMap[name].revenue += Number(o.total) || 0
+      })
+      const topProducts = Object.values(productMap).sort((a,b) => b.revenue - a.revenue).slice(0, 5)
       setShopeeOrders({
         total: allOrders.length,
         month: monthOrders.length,
         cancelled: monthOrders.filter(o => o.status === 'Cancelled').length,
         toShip: allOrders.filter(o => o.status === 'To Ship' || o.status === 'To ship').length,
         monthRevenue,
+        ydayOrders: ydayOrders.length,
+        ydayRevenue,
+        ydayCancelled,
+        topProducts,
       })
       // Income
       const incSnap = await getDocs(collection(db, 'shopee_income'))
@@ -107,8 +140,27 @@ export default function DashboardPage({ uid: propUid }) {
       const relSnap = await getDocs(collection(db, 'shopee_income_released'))
       const relDocs = relSnap.docs.map(d => d.data()).filter(d => d.userId === uid3)
       const releasedTotal = relDocs.reduce((s, d) => s + (Number(d.summary?.totalAmount) || 0), 0)
-      setShopeeIncome({ unreleased: unreleasedTotal, released: releasedTotal })
+      // 手数料合計（今月分）
+      const nowStr3 = new Date().toISOString().slice(0, 7)
+      const feesTotal = incDocs
+        .filter(d => { const u = d.uploadedAt; const s = u?.toDate ? u.toDate().toISOString() : String(u||''); return s.startsWith(nowStr3) })
+        .reduce((s, d) => {
+          const sum = d.summary || {}
+          return s + Math.abs(Number(sum.commissionFee)||0)
+                   + Math.abs(Number(sum.serviceFee)||0)
+                   + Math.abs(Number(sum.transactionFee)||0)
+        }, 0)
+      setShopeeIncome({ unreleased: unreleasedTotal, released: releasedTotal, fees: feesTotal })
     } catch(e) { console.error('shopee manager fetch error:', e) }
+    // Inventory 仕入原価取得
+    try {
+      const uid4 = propUid || auth.currentUser?.uid || 'anonymous'
+      const invSnap = await getDocs(collection(db, 'inventory_items'))
+      const invDocs = invSnap.docs.map(d => d.data()).filter(d => d.userId === uid4)
+      const allItems = invDocs.flatMap(d => d.items || [])
+      const totalCostPhp = allItems.reduce((s, i) => s + (Number(i.costPhp)||0) * (Number(i.qty)||0), 0)
+      setInventoryCost(totalCostPhp)
+    } catch(e) { console.error('inventory fetch error:', e) }
     // 為替レート取得
     try {
       const { doc, getDoc } = await import('firebase/firestore')
@@ -197,8 +249,7 @@ export default function DashboardPage({ uid: propUid }) {
   })()
 
   const TABS = [
-    { id:'today',     label:'📅 日次（当日）' },
-    { id:'yesterday', label:'📅 日次（前日）' },
+    { id:'yesterday', label:'📅 日次' },
     { id:'weekly',    label:'📆 週次' },
     { id:'monthly',   label:'📊 月次' },
     { id:'roadmap',   label:'🎯 ロードマップ' },
@@ -331,33 +382,65 @@ export default function DashboardPage({ uid: propUid }) {
           <div style={{ maxWidth:1200, margin:'0 auto', padding:'1.5rem' }}>
 
 
-            {/* 日次（当日）タブ */}
-            {tab === 'today' && (
+            {/* 日次タブ */}
+            {tab === 'yesterday' && (
               <div className="fade-up">
-                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>📅 {todayStr} のサマリー</div>
 
-                {/* KPIカード */}
-                {latest && (
-                  <KpiCards items={[
-                    { l:'当日売上', v: todayDiarySales.jpy ? '¥'+todayDiarySales.jpy.toLocaleString() : todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: todayDiarySales.jpy && todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '' },
-                    { l:'今月累計（Diary）', v:'¥'+Math.round(monthlyDiarySales.jpy || monthlyDiarySales.php * fxRate).toLocaleString(), a:'#f59e0b', sub:'₱'+Math.round(monthlyDiarySales.php).toLocaleString()+' / '+monthlyDiarySales.days+'日分' },
-                    { l:'今月受注（Manager）', v: shopeeOrders.month+'件', a:'var(--blue, #3b82f6)', sub: shopeeOrders.month > 0 ? '₱'+Math.round(shopeeOrders.monthRevenue).toLocaleString() : '' },
-                    { l:'発送待ち', v: shopeeOrders.toShip+'件', a: shopeeOrders.toShip > 0 ? 'var(--yellow, #f59e0b)' : 'var(--green)' },
-                    { l:'未リリース収益', v: shopeeIncome.unreleased > 0 ? '₱'+Math.round(shopeeIncome.unreleased).toLocaleString() : '-', a:'var(--ai)' },
-                    { l:'商品数', v:(latest.kpis?.productCount||0)+'件', a:'var(--purple)' },
-                    { l:'平均CTR', v:(latest.kpis?.avgCtr||0).toFixed(2)+'%', a:(latest.kpis?.avgCtr||0)>3?'var(--green)':'var(--yellow)' },
-                    { l:'平均CVR', v:(latest.kpis?.avgCvr||0).toFixed(2)+'%', a:(latest.kpis?.avgCvr||0)>5?'var(--green)':(latest.kpis?.avgCvr||0)<3?'var(--red)':'var(--yellow)' },
-                    { l:'緊急改善', v:(latest.kpis?.urgentCount||0)+'件', a:(latest.kpis?.urgentCount||0)>0?'var(--red)':'var(--green)' },
-                    { l:'最終アップ', v:formatLabel(latest.uploadedAt), a:'var(--ai)' },
-                  ]} />
+                {/* 1. 今月の目標ペース */}
+                <GoalPaceBlock uid={propUid || auth.currentUser?.uid} latest={latest} monthlyDiarySales={monthlyDiarySales} fxRateOverride={fxRate} shopeeIncome={shopeeIncome} inventoryCost={inventoryCost} />
+
+                {/* 2. Diary KPI（前日） */}
+                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📅 前日の実績（Diary）</div>
+                <KpiCards items={[
+                  { l:'売上', v: todayDiarySales.jpy ? '¥'+todayDiarySales.jpy.toLocaleString() : todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '' },
+                  { l:'注文数', v: todayDiarySales.orders ? todayDiarySales.orders+'件' : '-', a:'var(--blue, #3b82f6)', sub: todayDiarySales.cancelled ? 'キャンセル '+todayDiarySales.cancelled+'件' : '' },
+                  { l:'OCR', v: todayDiarySales.ocr ? todayDiarySales.ocr+'%' : '-', a: todayDiarySales.ocr > 5 ? 'var(--green)' : 'var(--yellow)' },
+                  { l:'Visitors', v: todayDiarySales.visitors ? todayDiarySales.visitors.toLocaleString() : '-', a:'var(--blue, #3b82f6)', sub: todayDiarySales.clicks ? 'Clicks: '+todayDiarySales.clicks : '' },
+                  { l:'CVR', v: todayDiarySales.cvr ? todayDiarySales.cvr.toFixed(2)+'%' : '-', a: todayDiarySales.cvr > 5 ? 'var(--green)' : todayDiarySales.cvr < 3 ? 'var(--red)' : 'var(--yellow)', sub: 'V:'+todayDiarySales.visitors+' O:'+todayDiarySales.orders },
+                  { l:'フォロワー', v: todayDiarySales.followers ? Number(todayDiarySales.followers).toLocaleString() : '-', a:'var(--ai)' },
+                ]} />
+
+                {/* 3. Orderレポート KPI（前日） */}
+                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📦 注文レポート（前日）</div>
+                <KpiCards items={[
+                  { l:'前日受注', v: shopeeOrders.ydayOrders+'件', a:'var(--blue, #3b82f6)', sub: shopeeOrders.ydayRevenue > 0 ? '₱'+Math.round(shopeeOrders.ydayRevenue).toLocaleString() : '' },
+                  { l:'前日キャンセル', v: shopeeOrders.ydayCancelled+'件', a: shopeeOrders.ydayCancelled > 0 ? 'var(--red)' : 'var(--green)' },
+                  { l:'前日平均単価', v: shopeeOrders.ydayOrders > 0 ? '₱'+Math.round(shopeeOrders.ydayRevenue / shopeeOrders.ydayOrders).toLocaleString() : '-', a:'var(--purple)' },
+                  { l:'発送待ち', v: shopeeOrders.toShip+'件', a: shopeeOrders.toShip > 0 ? 'var(--yellow, #f59e0b)' : 'var(--green)' },
+                  { l:'未リリース収益', v: shopeeIncome.unreleased > 0 ? '₱'+Math.round(shopeeIncome.unreleased).toLocaleString() : '-', a:'var(--ai)' },
+                ]} />
+
+                {/* 売れた商品TOP5（前日） */}
+                {shopeeOrders.topProducts && shopeeOrders.topProducts.length > 0 && (
+                  <div className="card" style={{ padding:'1.1rem', marginBottom:'0.5rem' }}>
+                    <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.75rem' }}>📦 前日 売れた商品 TOP5</div>
+                    {shopeeOrders.topProducts.slice(0,5).map((p,i) => (
+                      <div key={i} style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.35rem 0.6rem', background:'rgba(59,130,246,0.07)', borderRadius:6, marginBottom:'0.3rem' }}>
+                        <span style={{ fontFamily:"'Bebas Neue',sans-serif", color:'var(--blue, #3b82f6)', fontSize:'1rem', minWidth:'1.2rem' }}>{i+1}</span>
+                        <span style={{ fontSize:'0.7rem', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                        <span style={{ fontSize:'0.68rem', fontWeight:700, color:'var(--blue, #3b82f6)', whiteSpace:'nowrap' }}>{p.qty}件</span>
+                        <span style={{ fontSize:'0.68rem', color:'var(--orange)', whiteSpace:'nowrap' }}>₱{Math.round(p.revenue).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
 
-                {/* 今月の目標ペース */}
-                <GoalPaceBlock uid={propUid || auth.currentUser?.uid} latest={latest} monthlyDiarySales={monthlyDiarySales} fxRateOverride={fxRate} />
+                {/* 4. パフォーマンスレポート KPI */}
+                {latest && (
+                  <>
+                    <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📈 パフォーマンスレポート（最新アップ）</div>
+                    <KpiCards items={[
+                      { l:'商品数', v:(latest.kpis?.productCount||0)+'件', a:'var(--purple)' },
+                      { l:'平均CTR', v:(latest.kpis?.avgCtr||0).toFixed(2)+'%', a:(latest.kpis?.avgCtr||0)>3?'var(--green)':'var(--yellow)', sub:'基準: 3.00%以上' },
+                      { l:'平均CVR', v:(latest.kpis?.avgCvr||0).toFixed(2)+'%', a:(latest.kpis?.avgCvr||0)>5?'var(--green)':(latest.kpis?.avgCvr||0)<3?'var(--red)':'var(--yellow)', sub:'基準: 5.00%以上' },
+                      { l:'緊急改善', v:(latest.kpis?.urgentCount||0)+'件', a:(latest.kpis?.urgentCount||0)>0?'var(--red)':'var(--green)' },
+                    ]} />
+                  </>
+                )}
 
-                {/* ShopeeDiary最新ログ */}
+                {/* 5. ShopeeDiary最新ログ */}
                 {diaryLogs.length > 0 && (
-                  <div className="card" style={{ padding:'1.1rem', marginTop:'0.5rem' }}>
+                  <div className="card" style={{ padding:'1.1rem', marginTop:'1rem', marginBottom:'1rem' }}>
                     <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.75rem' }}>📅 ShopeeDiary 最新ログ</div>
                     <div style={{ display:'flex', flexDirection:'column', gap:'0.4rem' }}>
                       {diaryLogs.slice(0,5).map((l, i) => (
@@ -372,18 +455,14 @@ export default function DashboardPage({ uid: propUid }) {
                     </div>
                   </div>
                 )}
-              </div>
-            )}
 
-            {/* 日次（前日）タブ */}
-            {tab === 'yesterday' && (
-              <div className="fade-up">
-                <GoalAchievementBlock uid={propUid || auth.currentUser?.uid} latest={latest} label="前日" />
-                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1rem 0' }}>📅 前回との差分</div>
+                {/* 6. 前回比（パフォーマンスレポート） */}
+                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1rem 0' }}>📊 前回アップとの差分</div>
                 {histories.length < 2 ? (
                   <div style={{ textAlign:'center', padding:'3rem', color:'var(--dim2)', fontSize:'0.85rem', border:'1px solid var(--rim)', borderRadius:12 }}>2件以上のデータが必要です</div>
                 ) : (
                   <>
+                    <GoalAchievementBlock uid={propUid || auth.currentUser?.uid} latest={latest} label="前日" />
                     <KpiCards items={[
                       { l:'売上', v:'₱'+(latest.kpis?.totalSales||0).toLocaleString('en',{maximumFractionDigits:0}), a:'var(--orange)', d:kpiDiff('totalSales'), fmt: v => '₱'+Math.abs(v).toLocaleString('en',{maximumFractionDigits:0}) },
                       { l:'商品数', v:(latest.kpis?.productCount||0)+'件', a:'var(--purple)', d:kpiDiff('productCount'), fmt: v => Math.abs(v)+'件' },
@@ -546,7 +625,7 @@ function GoalPaceBar({ label, unit, color, actual, target, daysElapsed, daysInMo
   )
 }
 
-function GoalPaceBlock({ uid, latest, monthlyDiarySales, fxRateOverride }) {
+function GoalPaceBlock({ uid, latest, monthlyDiarySales, fxRateOverride, shopeeIncome, inventoryCost }) {
   const [goals, setGoals] = useState(null)
   const [fxRate, setFxRate] = useState(1)
   useEffect(() => { if (uid) load() }, [uid])
@@ -575,8 +654,13 @@ function GoalPaceBlock({ uid, latest, monthlyDiarySales, fxRateOverride }) {
     : (monthlyDiarySales?.php && monthlyDiarySales.php > 0)
     ? Math.round(monthlyDiarySales.php * effectiveFxRate)
     : Math.round((latest.kpis?.totalSales || 0) * effectiveFxRate)
+  // 粗利計算: 売上(₱→¥) - Shopee手数料(₱→¥) - 在庫仕入原価(₱→¥)
+  const feesJpy = Math.round((shopeeIncome?.fees || 0) * effectiveFxRate)
+  const costJpy = Math.round((inventoryCost || 0) * effectiveFxRate)
+  const grossJpy = salesJpy - feesJpy - costJpy
   const GOAL_KEYS = [
     { key:'sales',  label:'月間売上',   unit:'¥', actual: salesJpy },
+    { key:'gross',  label:'月間粗利',   unit:'¥', actual: grossJpy > 0 ? grossJpy : 0, color:'#10b981' },
     { key:'orders', label:'月間受注数', unit:'件', actual: latest.kpis?.totalOrders },
     { key:'ctr',    label:'CTR',       unit:'%',  actual: latest.kpis?.avgCtr },
     { key:'cvr',    label:'CVR',       unit:'%',  actual: latest.kpis?.avgCvr },
