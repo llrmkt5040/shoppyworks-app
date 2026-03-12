@@ -401,18 +401,18 @@ export default function DashboardPage({ uid: propUid }) {
             {/* 週次タブ */}
             {tab === 'weekly' && (
               <div className="fade-up">
-                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>📆 直近7件の推移</div>
-                <TrendCharts data={weekData} />
                 <GoalAchievementBlock uid={propUid || auth.currentUser?.uid} latest={latest} label="週次" />
+                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1rem 0' }}>📆 直近7件の推移</div>
+                <TrendCharts data={weekData} />
               </div>
             )}
 
             {/* 月次タブ */}
             {tab === 'monthly' && (
               <div className="fade-up">
-                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>📊 直近30件の推移</div>
-                <TrendCharts data={monthData} />
                 <GoalAchievementBlock uid={propUid || auth.currentUser?.uid} latest={latest} label="月次" />
+                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1rem 0' }}>📊 直近30件の推移</div>
+                <TrendCharts data={monthData} />
               </div>
             )}
 
