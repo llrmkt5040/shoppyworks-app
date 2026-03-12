@@ -8,6 +8,7 @@ import ActionLogPage from "../pages/ActionLogPage"
 import InventoryPage from "../pages/InventoryPage"
 import RequestsPage from "../pages/RequestsPage"
 import ShopeeManagerPage from "../pages/ShopeeManagerPage"
+import MassUpdatePage from "../pages/MassUpdatePage"
 import SettingsPage from "../pages/SettingsPage"
 
 const NAV = [
@@ -17,6 +18,7 @@ const NAV = [
   { id: "inventory",  icon: "📦", label: "ShopeeStockManager",  sub: "在庫棚卸"   },
   { id: "requests",   icon: "🛍️", label: "PasabuyManager",      sub: "御用聞き"   },
   { id: "shopee",    icon: "📂", label: "ShopeeManager",   sub: "一元管理"   },
+  { id: "massupdate", icon: "🔄", label: "MassUpdate管理",  sub: "出品管理"   },
   { id: "settings",   icon: "⚙️", label: "設定",                sub: ""           },
 ]
 
@@ -94,6 +96,7 @@ export default function AppLayout() {
       case "inventory": return <InventoryPage uid={uid} />
       case "requests":  return <RequestsPage uid={uid} />
       case "shopee":    return <ShopeeManagerPage uid={uid} />
+      case "massupdate": return <MassUpdatePage uid={uid} />
       case "settings":  return <SettingsPage uid={uid} profile={profile} />
       default:          return <DashboardPage uid={uid} />
     }
