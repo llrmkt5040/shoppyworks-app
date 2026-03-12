@@ -9,6 +9,8 @@ export default function DashboardPage({ uid: propUid }) {
   const [loading, setLoading] = useState(true)
   const [diaryLogs, setDiaryLogs] = useState([])
   const [fxRate, setFxRate] = useState(1)
+  const [shopeeOrders, setShopeeOrders] = useState({ total: 0, month: 0, cancelled: 0, toShip: 0, monthRevenue: 0 })
+  const [shopeeIncome, setShopeeIncome] = useState({ unreleased: 0, released: 0 })
   const [monthlyDiarySales, setMonthlyDiarySales] = useState({ php: 0, jpy: 0, days: 0 })
   const [todayDiarySales, setTodayDiarySales] = useState({ php: 0, jpy: 0 })
   const dropRef = useRef()
@@ -80,6 +82,33 @@ export default function DashboardPage({ uid: propUid }) {
         jpy: Number(todayLog?.sales_jpy) || 0,
       })
     } catch(e) { console.error('diary fetch error:', e) }
+    // ShopeeManagerデータ取得
+    try {
+      const { query: q2, where: w2 } = await import('firebase/firestore')
+      const uid3 = propUid || auth.currentUser?.uid || 'anonymous'
+      const nowStr2 = new Date().toISOString().slice(0, 7)
+      // オーダー
+      const ordSnap = await getDocs(collection(db, 'shopee_orders'))
+      const ordDocs = ordSnap.docs.map(d => d.data()).filter(d => d.userId === uid3)
+      const allOrders = ordDocs.flatMap(d => d.orders || [])
+      const monthOrders = allOrders.filter(o => (o.orderDate || '').startsWith(nowStr2))
+      const monthRevenue = monthOrders.filter(o => o.status !== 'Cancelled').reduce((s, o) => s + (Number(o.total) || 0), 0)
+      setShopeeOrders({
+        total: allOrders.length,
+        month: monthOrders.length,
+        cancelled: monthOrders.filter(o => o.status === 'Cancelled').length,
+        toShip: allOrders.filter(o => o.status === 'To Ship' || o.status === 'To ship').length,
+        monthRevenue,
+      })
+      // Income
+      const incSnap = await getDocs(collection(db, 'shopee_income'))
+      const incDocs = incSnap.docs.map(d => d.data()).filter(d => d.userId === uid3)
+      const unreleasedTotal = incDocs.reduce((s, d) => s + (Number(d.summary?.totalAmount) || 0), 0)
+      const relSnap = await getDocs(collection(db, 'shopee_income_released'))
+      const relDocs = relSnap.docs.map(d => d.data()).filter(d => d.userId === uid3)
+      const releasedTotal = relDocs.reduce((s, d) => s + (Number(d.summary?.totalAmount) || 0), 0)
+      setShopeeIncome({ unreleased: unreleasedTotal, released: releasedTotal })
+    } catch(e) { console.error('shopee manager fetch error:', e) }
     // 為替レート取得
     try {
       const { doc, getDoc } = await import('firebase/firestore')
@@ -347,6 +376,9 @@ export default function DashboardPage({ uid: propUid }) {
                   <KpiCards items={[
                     { l:'当日売上', v: todayDiarySales.jpy ? '¥'+todayDiarySales.jpy.toLocaleString() : todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: todayDiarySales.jpy && todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '' },
                     { l:'今月累計（Diary）', v:'¥'+Math.round(monthlyDiarySales.jpy || monthlyDiarySales.php * fxRate).toLocaleString(), a:'#f59e0b', sub:'₱'+Math.round(monthlyDiarySales.php).toLocaleString()+' / '+monthlyDiarySales.days+'日分' },
+                    { l:'今月受注（Manager）', v: shopeeOrders.month+'件', a:'var(--blue, #3b82f6)', sub: shopeeOrders.month > 0 ? '₱'+Math.round(shopeeOrders.monthRevenue).toLocaleString() : '' },
+                    { l:'発送待ち', v: shopeeOrders.toShip+'件', a: shopeeOrders.toShip > 0 ? 'var(--yellow, #f59e0b)' : 'var(--green)' },
+                    { l:'未リリース収益', v: shopeeIncome.unreleased > 0 ? '₱'+Math.round(shopeeIncome.unreleased).toLocaleString() : '-', a:'var(--ai)' },
                     { l:'商品数', v:(latest.kpis?.productCount||0)+'件', a:'var(--purple)' },
                     { l:'平均CTR', v:(latest.kpis?.avgCtr||0).toFixed(2)+'%', a:(latest.kpis?.avgCtr||0)>3?'var(--green)':'var(--yellow)' },
                     { l:'平均CVR', v:(latest.kpis?.avgCvr||0).toFixed(2)+'%', a:(latest.kpis?.avgCvr||0)>5?'var(--green)':(latest.kpis?.avgCvr||0)<3?'var(--red)':'var(--yellow)' },

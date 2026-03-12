@@ -12,6 +12,8 @@ import { db, auth } from '../lib/firebase'
 import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore'
 
 const CHANGELOG = [
+  { date: "2026-03-12", text: "🔄 MassUpdate管理ページ追加（JAN・原産国・SKU分類・AI補完・XLSXダウンロード）" },
+  { date: "2026-03-12", text: "🎯 ダッシュボード強化（目標ペースバー・¥メイン表示・為替USD経由2%・目標達成率グラフ）" },
   { date: "2026-03-12", text: "👥 スタッフアクセス機能追加（設定画面からスタッフメール登録・全ページ対応）" },
   { date: "2026-03-12", text: "🔒 Firestoreセキュリティルール設定（ユーザーデータ保護）" },
   { date: "2026-03-12", text: "📂 出荷管理タブに再アップロードボタン追加" },
@@ -25,13 +27,13 @@ const CHANGELOG = [
 ]
 
 const ROADMAP = [
-  { status: "🔴", text: "講師コクピット（受講生の進捗一覧）" },
-  { status: "🔴", text: "ユーザー目標設定（売上・利益目標）" },
-  { status: "🟠", text: "Shopee CSV連携強化" },
-  { status: "🟠", text: "在庫棚卸とCSVの連動" },
-  { status: "🟡", text: "AI分析修正（4月以降）" },
+  { status: "🔴", text: "ShopeeManagerデータ連動（オーダー・MyIncome→ダッシュボード）" },
+  { status: "🟠", text: "MassUpdate大規模対応（1万件・設計変更）" },
+  { status: "🟠", text: "アカウントヘルス管理（ペナルティ・遅延・レーティング）" },
+  { status: "🟡", text: "プリファードセラー管理（スコア・クライテリア）" },
   { status: "🟡", text: "アドバイスマネジメント" },
   { status: "🟡", text: "卸メニュー（ドロップシッピング）" },
+  { status: "🔵", text: "講師コクピット（API・AI全部揃ってから）" },
   { status: "🔵", text: "Shopee API連動" },
 ]
 
