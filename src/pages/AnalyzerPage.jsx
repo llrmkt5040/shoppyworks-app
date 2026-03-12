@@ -24,6 +24,17 @@ const CHANGELOG = [
   { date: "2026-03-10", text: "🏠 週次ダッシュボード新規作成" }
 ]
 
+const ROADMAP = [
+  { status: "🔴", text: "講師コクピット（受講生の進捗一覧）" },
+  { status: "🔴", text: "ユーザー目標設定（売上・利益目標）" },
+  { status: "🟠", text: "Shopee CSV連携強化" },
+  { status: "🟠", text: "在庫棚卸とCSVの連動" },
+  { status: "🟡", text: "AI分析修正（4月以降）" },
+  { status: "🟡", text: "アドバイスマネジメント" },
+  { status: "🟡", text: "卸メニュー（ドロップシッピング）" },
+  { status: "🔵", text: "Shopee API連動" },
+]
+
 function Toast({ msg, type }) {
   if (!msg) return null
   const bg = type === 'success' ? '#16a34a' : '#dc2626'
@@ -291,16 +302,29 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
         <input id="xlsx-input" type="file" accept=".xlsx,.xls" style={{ display:'none' }} onChange={e => handleFile(e.target.files[0])} />
       </div>
 
-      {/* システム更新履歴 */}
-      <div className="card" style={{ padding:'1.1rem' }}>
-        <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.75rem' }}>🔄 システム更新履歴</div>
-        <div style={{ display:'flex', flexDirection:'column', gap:'0.4rem' }}>
-          {CHANGELOG.map((c, i) => (
-            <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'0.75rem', padding:'0.4rem 0', borderBottom: i < CHANGELOG.length-1 ? '1px solid var(--rim)' : 'none' }}>
-              <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.65rem', color:'var(--dim2)', whiteSpace:'nowrap', marginTop:'0.1rem' }}>{c.date}</span>
-              <span style={{ fontSize:'0.75rem', color:'var(--text)' }}>{c.text}</span>
-            </div>
-          ))}
+      {/* システム更新履歴 + 今後の改修予定 */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem' }}>
+        <div className="card" style={{ padding:'1.1rem' }}>
+          <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.75rem' }}>🔄 システム更新履歴</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:'0.3rem', maxHeight:'220px', overflowY:'auto', paddingRight:'0.25rem' }}>
+            {CHANGELOG.map((c, i) => (
+              <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'0.75rem', padding:'0.35rem 0', borderBottom: i < CHANGELOG.length-1 ? '1px solid var(--rim)' : 'none' }}>
+                <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.62rem', color:'var(--dim2)', whiteSpace:'nowrap', marginTop:'0.1rem', flexShrink:0 }}>{c.date}</span>
+                <span style={{ fontSize:'0.72rem', color:'var(--text)', lineHeight:1.4 }}>{c.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="card" style={{ padding:'1.1rem' }}>
+          <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--orange)', fontWeight:700, marginBottom:'0.75rem' }}>🚀 今後の改修予定</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:'0.3rem', maxHeight:'220px', overflowY:'auto', paddingRight:'0.25rem' }}>
+            {ROADMAP.map((r, i) => (
+              <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'0.5rem', padding:'0.35rem 0', borderBottom: i < ROADMAP.length-1 ? '1px solid var(--rim)' : 'none' }}>
+                <span style={{ fontSize:'0.75rem', flexShrink:0 }}>{r.status}</span>
+                <span style={{ fontSize:'0.72rem', color:'var(--text)', lineHeight:1.4 }}>{r.text}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
