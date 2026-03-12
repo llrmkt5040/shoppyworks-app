@@ -16,7 +16,7 @@ export default function DashboardPage({ uid: propUid }) {
   const dropRef = useRef()
   const [tab, setTab] = useState('today')
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { if (propUid || auth.currentUser?.uid) loadData() }, [propUid])
 
   async function handleFile(file) {
     if (!file) return
@@ -330,46 +330,11 @@ export default function DashboardPage({ uid: propUid }) {
         {tab !== 'roadmap' && (
           <div style={{ maxWidth:1200, margin:'0 auto', padding:'1.5rem' }}>
 
-            {/* アップロードステータスバー（全タブ共通） */}
-            <div style={{ marginBottom:'1.5rem', borderRadius:16, overflow:'hidden', border:'1px solid var(--rim)' }}>
-              <div style={{ padding:'0.9rem 1.5rem', background: todayUploaded ? 'rgba(22,163,74,0.08)' : daysSinceUpload >= 2 ? 'rgba(220,38,38,0.08)' : 'rgba(234,179,8,0.08)', display:'flex', alignItems:'center', gap:'1rem', flexWrap:'wrap' }}>
-                <div style={{ fontSize:'1.5rem' }}>{todayUploaded ? '✅' : daysSinceUpload >= 2 ? '🚨' : '⚠️'}</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:900, fontSize:'0.85rem', color: todayUploaded ? '#16a34a' : daysSinceUpload >= 2 ? '#dc2626' : '#ca8a04' }}>
-                    {todayUploaded ? '今日のアップロード完了！' : daysSinceUpload === 1 ? '今日まだアップロードしていません' : daysSinceUpload >= 2 ? daysSinceUpload + '日間アップロードされていません' : '最初のXLSXをアップロードしてください'}
-                  </div>
-                  <div style={{ fontSize:'0.7rem', color:'var(--dim2)', marginTop:'0.15rem', display:'flex', gap:'1rem', flexWrap:'wrap' }}>
-                    {latestDateStr && <span>最終アップ: {latestDateStr}</span>}
-                    {streak > 0 && <span style={{ color:'var(--orange)', fontWeight:700 }}>🔥 {streak}日連続！</span>}
-                    <span>総アップ: {histories.length}回</span>
-                  </div>
-                </div>
-                {!todayUploaded && (
-                  <a href="https://seller.shopee.ph/datacenter/product/performance" target="_blank" style={{ padding:'0.4rem 0.9rem', borderRadius:8, background:'var(--orange)', color:'#fff', fontSize:'0.73rem', fontWeight:700, textDecoration:'none', whiteSpace:'nowrap' }}>Shopeeで取得 →</a>
-                )}
-              </div>
-            </div>
 
             {/* 日次（当日）タブ */}
             {tab === 'today' && (
               <div className="fade-up">
                 <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>📅 {todayStr} のサマリー</div>
-
-                {/* XLSXアップロードエリア */}
-                <div
-                  ref={dropRef}
-                  onClick={() => document.getElementById('dash-xlsx-input').click()}
-                  onDragOver={e => { e.preventDefault(); dropRef.current.style.borderColor='var(--orange)' }}
-                  onDragLeave={() => dropRef.current.style.borderColor='rgba(255,107,43,0.3)'}
-                  onDrop={e => { e.preventDefault(); dropRef.current.style.borderColor='rgba(255,107,43,0.3)'; handleFile(e.dataTransfer.files[0]) }}
-                  style={{ border:'2px dashed rgba(255,107,43,0.3)', borderRadius:16, padding:'1.5rem', textAlign:'center', cursor:'pointer', background: todayUploaded ? 'rgba(22,163,74,0.04)' : 'rgba(255,107,43,0.02)', marginBottom:'1.25rem', transition:'all 0.3s' }}>
-                  <div style={{ fontSize:'1.8rem', marginBottom:'0.4rem' }}>{todayUploaded ? '✅' : '📊'}</div>
-                  <div style={{ fontWeight:900, fontSize:'0.85rem', marginBottom:'0.25rem' }}>{todayUploaded ? '今日アップ済み · 別ファイルをドロップで更新' : 'XLSXをドロップしてアップロード'}</div>
-                  <div style={{ fontSize:'0.68rem', color:'var(--dim2)' }}>
-                    <a href="https://seller.shopee.ph/datacenter/product/performance" target="_blank" style={{ color:'var(--orange)', textDecoration:'none' }}>seller.shopee.ph › Product Performance</a> · 過去30日を選択
-                  </div>
-                  <input id="dash-xlsx-input" type="file" accept=".xlsx,.xls" style={{ display:'none' }} onChange={e => handleFile(e.target.files[0])} />
-                </div>
 
                 {/* KPIカード */}
                 {latest && (

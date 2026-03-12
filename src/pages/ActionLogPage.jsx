@@ -23,7 +23,7 @@ function Section({ title, children }) {
   )
 }
 
-export default function ActionLogPage() {
+export default function ActionLogPage({ uid: propUid }) {
   const [tab, setTab] = useState("input")
   const [logs, setLogs] = useState([])
   const [saving, setSaving] = useState(false)
@@ -58,7 +58,7 @@ export default function ActionLogPage() {
 
   async function loadSettings() {
     try {
-      const snap = await getDoc(doc(db, "user_settings", auth.currentUser?.uid))
+      const snap = await getDoc(doc(db, "user_settings", propUid || auth.currentUser?.uid))
       if (snap.exists() && snap.data().field_visibility) {
         setSettings(snap.data().field_visibility)
       }
@@ -71,7 +71,7 @@ export default function ActionLogPage() {
 
   async function loadPrevRate() {
     try {
-      const snap = await getDoc(doc(db, "fx_rates", auth.currentUser?.uid))
+      const snap = await getDoc(doc(db, "fx_rates", propUid || auth.currentUser?.uid))
       if (snap.exists()) {
         const data = snap.data()
         setPrevRate({ rate: data.rate_php_jpy, updatedAt: data.updatedAt })
@@ -81,7 +81,7 @@ export default function ActionLogPage() {
 
   async function fetchLogs() {
     try {
-      const q = query(collection(db, "action_logs"), where("uid", "==", auth.currentUser?.uid))
+      const q = query(collection(db, "action_logs"), where("uid", "==", propUid || auth.currentUser?.uid))
       const snap = await getDocs(q)
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       data.sort((a, b) => (b.date || "").localeCompare(a.date || ""))
@@ -103,7 +103,7 @@ export default function ActionLogPage() {
         const rate = (1 / usdPhp) * usdJpy * 0.98
         const rateStr = rate.toFixed(4)
         setForm(f => ({ ...f, rate_php_jpy: rateStr }))
-        await setDoc(doc(db, "fx_rates", auth.currentUser?.uid), {
+        await setDoc(doc(db, "fx_rates", propUid || auth.currentUser?.uid), {
           rate_php_jpy: rateStr,
           usd_jpy: usdJpy.toFixed(4),
           usd_php: usdPhp.toFixed(4),
@@ -118,7 +118,7 @@ export default function ActionLogPage() {
           const rate2 = (1 / usdPhp2) * usdJpy2 * 0.98
           const rateStr = rate2.toFixed(4)
           setForm(f => ({ ...f, rate_php_jpy: rateStr }))
-          await setDoc(doc(db, "fx_rates", auth.currentUser?.uid), {
+          await setDoc(doc(db, "fx_rates", propUid || auth.currentUser?.uid), {
             rate_php_jpy: rateStr,
             usd_jpy: usdJpy2.toFixed(4),
             usd_php: usdPhp2.toFixed(4),
@@ -153,7 +153,7 @@ export default function ActionLogPage() {
       } else {
         await addDoc(collection(db, "action_logs"), {
           ...form, sales_jpy: salesJpy.toString(), sales_rebate_jpy: salesRebateJpy.toString(),
-          uid: auth.currentUser?.uid, email: auth.currentUser?.email,
+          uid: propUid || auth.currentUser?.uid, email: auth.currentUser?.email,
           createdAt: new Date().toISOString()
         })
       }
@@ -405,10 +405,10 @@ export default function ActionLogPage() {
         </div>
       )}
       {tab === "inventory" && (
-        <InventoryTab uid={auth.currentUser?.uid} />
+        <InventoryTab uid={propUid || auth.currentUser?.uid} />
       )}
       {tab === "requests" && (
-        <RequestsTab uid={auth.currentUser?.uid} />
+        <RequestsTab uid={propUid || auth.currentUser?.uid} />
       )}
     </div>
   )

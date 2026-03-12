@@ -10,6 +10,7 @@ import RequestsPage from "../pages/RequestsPage"
 import ShopeeManagerPage from "../pages/ShopeeManagerPage"
 import MassUpdatePage from "../pages/MassUpdatePage"
 import AccountHealthPage from "../pages/AccountHealthPage"
+import TaskChecklist, { useUncompletedCount } from "./TaskChecklist"
 import SettingsPage from "../pages/SettingsPage"
 
 const NAV = [
@@ -27,9 +28,11 @@ const NAV = [
 export default function AppLayout() {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [page, setPage] = useState("analyzer")
+  const [page, setPage] = useState("dashboard")
   const [sideOpen, setSideOpen] = useState(true)
   const [userMenu, setUserMenu] = useState(false)
+  const [bellOpen, setBellOpen] = useState(false)
+  const uncompletedCount = useUncompletedCount(user?.uid)
   const [staffTarget, setStaffTarget] = useState(null) // スタッフがアクセス中のユーザー情報
 
   useEffect(() => {
@@ -169,6 +172,26 @@ export default function AppLayout() {
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <span style={{ fontSize: "0.88rem", fontWeight: 800, color: "var(--text)" }}>{current?.icon} {current?.label}</span>
             {current?.sub && (<span style={{ fontSize: "0.65rem", color: "var(--orange)", fontWeight: 700, padding: "0.1rem 0.45rem", borderRadius: 4, background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.25)" }}>{current.sub}</span>)}
+          </div>
+          <div style={{ marginLeft: "auto", position: "relative" }}>
+            <button onClick={() => setBellOpen(o => !o)} style={{ position: "relative", width: 36, height: 36, borderRadius: 8, border: "1px solid var(--rim)", background: bellOpen ? "rgba(251,146,60,0.12)" : "transparent", color: uncompletedCount > 0 ? "var(--orange)" : "var(--dim2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem" }}>
+              🔔
+              {uncompletedCount > 0 && (
+                <span style={{ position: "absolute", top: -4, right: -4, background: "var(--red)", color: "#fff", borderRadius: "50%", width: 16, height: 16, fontSize: "0.55rem", fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>{uncompletedCount > 9 ? "9+" : uncompletedCount}</span>
+              )}
+            </button>
+            {bellOpen && (
+              <div style={{ position: "absolute", top: 44, right: 0, width: 340, maxHeight: 480, overflowY: "auto", background: "var(--surface)", border: "1px solid var(--rim)", borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.3)", zIndex: 1000, padding: "1rem" }}>
+                <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "var(--text)", marginBottom: "0.75rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>📋 タスクチェックリスト</span>
+                  {uncompletedCount === 0
+                    ? <span style={{ fontSize: "0.65rem", color: "var(--green)", fontWeight: 700 }}>✅ 全完了！</span>
+                    : <span style={{ fontSize: "0.65rem", color: "var(--red)", fontWeight: 700 }}>残り {uncompletedCount} タスク</span>
+                  }
+                </div>
+                <TaskChecklist uid={user?.uid} onNavigate={(p) => { setPage(p); setBellOpen(false) }} compact={true} />
+              </div>
+            )}
           </div>
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>{renderPage()}</div>
