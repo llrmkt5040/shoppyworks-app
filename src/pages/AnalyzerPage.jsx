@@ -12,29 +12,29 @@ import { db, auth } from '../lib/firebase'
 import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore'
 
 const CHANGELOG = [
-  { date: "2026-03-12", text: "🔄 MassUpdate管理ページ追加（JAN・原産国・SKU分類・AI補完・XLSXダウンロード）" },
-  { date: "2026-03-12", text: "🎯 ダッシュボード強化（目標ペースバー・¥メイン表示・為替USD経由2%・目標達成率グラフ）" },
+  { date: "2026-03-12", text: "🔔 v0.6.0: タスクチェックリスト追加（日次/週次/月次・自動リセット・ベル通知バッジ）" },
+  { date: "2026-03-12", text: "🏥 v0.5.0: アカウントヘルス管理ページ追加（AI画像読み取り・週次記録・トレンド表示）" },
+  { date: "2026-03-12", text: "📂 v0.4.0: ShopeeManagerデータ連動（今月受注・発送待ち・未リリース収益→ダッシュボード）" },
+  { date: "2026-03-12", text: "🔄 v0.3.0: MassUpdate管理ページ追加（JAN・原産国・SKU分類・AI補完・XLSXダウンロード）" },
+  { date: "2026-03-12", text: "🎯 v0.2.0: ダッシュボード強化（目標ペースバー・¥メイン表示・為替USD経由2%・目標達成率グラフ）" },
   { date: "2026-03-12", text: "👥 スタッフアクセス機能追加（設定画面からスタッフメール登録・全ページ対応）" },
   { date: "2026-03-12", text: "🔒 Firestoreセキュリティルール設定（ユーザーデータ保護）" },
-  { date: "2026-03-12", text: "📂 出荷管理タブに再アップロードボタン追加" },
   { date: "2026-03-12", text: "📅 ShopeeDiaryにショップURL・項目順序改善・Voucher区切り追加" },
   { date: "2026-03-11", text: "🎯 ShopeeAnalyzerをコクピットに強化・トップページ設定" },
   { date: "2026-03-11", text: "📊 ダッシュボードを4タブ化（日次・週次・月次・ロードマップ）" },
   { date: "2026-03-11", text: "🔍 商品詳細テーブルに枠固定・ソート・フィルタ・条件指定を追加" },
-  { date: "2026-03-11", text: "🔥 ダッシュボードに日次アップ管理・ストリーク・アラート追加" },
   { date: "2026-03-10", text: "📂 分析履歴をFirestoreに保存・履歴ページ追加" },
-  { date: "2026-03-10", text: "🏠 週次ダッシュボード新規作成" }
+  { date: "2026-03-10", text: "🏠 v0.1.0: 初期リリース（Analyzer・Dashboard・Diary・StockManager・ShopeeManager・Settings）" }
 ]
 
 const ROADMAP = [
-  { status: "🔴", text: "ShopeeManagerデータ連動（オーダー・MyIncome→ダッシュボード）" },
-  { status: "🟠", text: "MassUpdate大規模対応（1万件・設計変更）" },
-  { status: "🟠", text: "アカウントヘルス管理（ペナルティ・遅延・レーティング）" },
-  { status: "🟡", text: "プリファードセラー管理（スコア・クライテリア）" },
+  { status: "🔴", text: "MassUpdate大規模対応（1万件・1商品1ドキュメント方式への設計変更）" },
+  { status: "🟠", text: "メール通知（Firebase Functions・日次/週次タスク未完了アラート）" },
+  { status: "🟠", text: "Shopee API連動（注文・商品・アカウントヘルスの自動取得）" },
+  { status: "🟡", text: "アカウントヘルスAI画像読み取り（4月以降・スクショ→自動入力）" },
   { status: "🟡", text: "アドバイスマネジメント" },
   { status: "🟡", text: "卸メニュー（ドロップシッピング）" },
   { status: "🔵", text: "講師コクピット（API・AI全部揃ってから）" },
-  { status: "🔵", text: "Shopee API連動" },
 ]
 
 function Toast({ msg, type }) {

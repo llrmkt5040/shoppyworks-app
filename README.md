@@ -1,91 +1,92 @@
 # ShoppyWorks Bootcamp App
 
-Shopeeエクスポート向け運営管理システム
+## 概要
+Shopeeフィリピン輸出向けEコマース管理アプリ。受講生のShopee運営を一元管理。
 
-🌐 本番URL: https://shoppyworks-bootcamp.web.app
-
----
-
-## 📋 システム更新履歴
-
-### v0.4.0 — 2026-03-12
-**ShopeeManagerデータ連動**
-- 📊 ダッシュボードに今月受注件数・₱売上（ShopeeManager連動）追加
-- 🚚 発送待ち件数をKPIカードに追加
-- 💰 未リリース収益（MyIncome）をKPIカードに追加
-- 🔄 CHANGELOG・ROADMAPをアプリ内・READMEで同期管理開始
-
-### v0.3.0 — 2026-03-12
-**MassUpdate管理ページ追加**
-- 🔄 MassUpdate管理ページ新規作成（専用ページ）
-- 📤 ShopeeのMass Update XLSXアップロード・Firestore保存
-- 📋 商品一覧・編集タブ（JAN・原産国・重量・ブランド・カテゴリ・価格・在庫数）
-- 🏷️ SKU分類フィルター（有在庫 / 無在庫 / Pasabuy）
-- 🔗 在庫棚卸（ShopeeStockManager）からJAN・原産国を自動補完
-- 🤖 AI補完機能（単体・一括）：JAN・原産国・重量・カテゴリ・Fail Reason修正案
-- 🔴 エラー管理タブ（Fail Reasonがある商品を一覧表示）
-- 📅 アップロード履歴タブ
-- ⬇ 編集済みXLSXダウンロード機能
-
-### v0.2.0 — 2026-03-12
-**ダッシュボード大幅強化**
-- 📈 日次タブに今月の目標ペースバー追加
-- 💴 表示を¥メイン・₱サブに統一
-- 💱 為替レートをUSD経由・Payoneer手数料2%込みに修正
-- 🎯 週次・月次・前日タブに目標達成率グラフ追加
-- 📊 KPIカードに当日売上・今月累計（Diary）追加
-- 🔧 目標ペースをDiary月次累計ベースに修正
-
-### v0.1.0 — 2026-03-12
-**初期リリース**
-- 📊 ShopeeAnalyzer（商品分析）
-- 📈 ShopeeWorksDashboard（数値管理）
-- 📅 ShopeeDiary（日次管理）
-- 📦 ShopeeStockManager（在庫棚卸）
-- 📂 ShopeeManager（一元管理）
-- ⚙️ Settings
+**本番URL**: https://shoppyworks-bootcamp.web.app  
+**GitHub**: https://github.com/llrmkt5040/shoppyworks-app  
+**技術**: React / Vite / Firebase（Firestore + Hosting）
 
 ---
 
-## 🗂️ Firestoreコレクション一覧
+## バージョン履歴
 
-| コレクション | 用途 |
-|-------------|------|
-| action_logs | 日次手入力（売上・出品数等） |
-| fx_rates | 為替レート（USD/JPY・USD/PHP） |
-| inventory_items | 在庫棚卸データ |
-| user_settings | ユーザー設定 |
-| xlsx_analyses | ShopeeAnalyzer分析結果 |
-| product_flags | 商品フラグ |
-| shopee_orders | オーダーデータ |
-| shopee_income | MyIncomeデータ |
-| shopee_income_released | リリース済みIncomeデータ |
-| cashflow_items | キャッシュフロー |
-| user_goals | 月間目標 |
-| mass_updates | MassUpdate履歴・商品データ |
+| バージョン | 日付 | 内容 |
+|-----------|------|------|
+| v0.6.0 | 2026-03-12 | タスクチェックリスト・ベル通知追加、ダッシュボード整理、スタッフアクセス対応 |
+| v0.5.0 | 2026-03-12 | アカウントヘルス管理ページ追加（AI画像読み取り・週次記録・トレンド） |
+| v0.4.0 | 2026-03-12 | ShopeeManagerデータ連動（今月受注・発送待ち・未リリース収益） |
+| v0.3.0 | 2026-03-12 | MassUpdate管理ページ追加（AI補完・SKU分類・XLSXダウンロード） |
+| v0.2.0 | 2026-03-12 | ダッシュボード強化（目標ペース・¥メイン・達成率グラフ） |
+| v0.1.0 | 2026-03-10 | 初期リリース（Analyzer・Dashboard・Diary・StockManager・ShopeeManager・Settings） |
 
 ---
 
-## 🚀 開発フロー
+## ページ一覧
+
+| ページ | アイコン | 役割 |
+|--------|---------|------|
+| ShopeeWorksDashboard | 📈 | KPI一元表示・目標ペース・日次/週次/月次タブ |
+| ShopeeAnalyzer | 📊 | 商品別CTR/CVR分析・AI改善提案・CHANGELOG |
+| ShopeeDiary | 📅 | 日次手入力ログ（売上・出品数・フォロワー） |
+| ShopeeStockManager | 📦 | 在庫棚卸・仕入れ管理 |
+| ShopeeManager | 📂 | 注文管理・MyIncome損益・キャッシュフロー |
+| MassUpdate管理 | 🔄 | 出品情報一括更新・AI補完・XLSX出力 |
+| アカウントヘルス | 🏥 | ヘルス指標週次記録・Preferred Seller管理 |
+| Settings | ⚙️ | ユーザー設定・スタッフ管理 |
+
+---
+
+## Firestoreコレクション
+
+| コレクション | 内容 | 更新タイミング |
+|-------------|------|--------------|
+| action_logs | 日次売上・出品数・フォロワー手入力 | ShopeeDiaryで毎日 |
+| fx_rates | ₱→¥換算レート（USD経由・Payoneer2%） | Diary保存時自動取得 |
+| inventory_items | 在庫棚卸（SKU/JAN/原産国/仕入価格） | ShopeeStockManagerで随時 |
+| user_settings | ユーザー設定・スタッフメール | Settingsで変更 |
+| xlsx_analyses | 分析結果（CTR/CVR/売上等） | XLSXアップロード時 |
+| product_flags | 商品フラグ（定番/季節/トレンド/終売） | Analyzerで手動 |
+| shopee_orders | 注文レポートデータ | ShopeeManagerでXLSX |
+| shopee_income | MyIncome To Releaseデータ | ShopeeManagerでXLSX |
+| shopee_income_released | MyIncome Releasedデータ | ShopeeManagerでXLSX |
+| cashflow_items | キャッシュフロー手入力 | ShopeeManagerで手動 |
+| user_goals | 月間目標 | ダッシュボードで月初設定 |
+| mass_updates | MassUpdate履歴・商品データ | MassUpdate管理でXLSX |
+| account_health | アカウントヘルス週次記録 | アカウントヘルスで毎週火曜 |
+| task_checklists | タスクチェックリスト状態 | 各タスク完了時・自動リセット |
+
+---
+
+## 推奨運用フロー
+
+| 頻度 | タスク |
+|------|--------|
+| 毎日（朝） | ShopeeDiary手入力 → Product Performance XLSX → 注文レポートXLSX |
+| 毎週火曜 | アカウントヘルス確認・記録 → MyIncome XLSX → MassUpdate・AI補完 |
+| 月初 | 月間目標設定 → 在庫棚卸更新 |
+
+---
+
+## 開発フロー
 ```bash
 # 開発サーバー起動
 cd ~/shoppyworks-app && npm run dev
 
-# ビルド確認
-npm run build
-
-# デプロイ
-firebase deploy --only hosting
-
-# Gitコミット（必ずbranchで作業）
+# ビルド＆デプロイ（必ずブランチで作業）
 git checkout -b feature/xxx
-git add . && git commit -m 'メッセージ' && git push origin feature/xxx
+# 作業...
+npm run build && firebase deploy --only hosting
+git add . && git commit -m "feat: 内容" && git push origin feature/xxx
 
 # mainにマージ
 git checkout main && git merge feature/xxx && git push origin main
 ```
 
-## ⚠️ 開発ルール
-- **必ずブランチを切ってから作業すること**
-- ビルド確認（npm run build）してからデプロイ
-- mainへのマージ前にブラウザで動作確認
+## 今後のロードマップ
+
+- 🔴 MassUpdate大規模対応（1万件・1商品1ドキュメント）
+- 🟠 メール通知（Firebase Functions）
+- 🟠 Shopee API連動（自動データ取得）
+- 🟡 アカウントヘルスAI画像読み取り（4月以降）
+- 🔵 講師コクピット
