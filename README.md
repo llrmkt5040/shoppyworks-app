@@ -8,6 +8,13 @@ Shopeeエクスポート向け運営管理システム
 
 ## 📋 システム更新履歴
 
+### v0.4.0 — 2026-03-12
+**ShopeeManagerデータ連動**
+- 📊 ダッシュボードに今月受注件数・₱売上（ShopeeManager連動）追加
+- 🚚 発送待ち件数をKPIカードに追加
+- 💰 未リリース収益（MyIncome）をKPIカードに追加
+- 🔄 CHANGELOG・ROADMAPをアプリ内・READMEで同期管理開始
+
 ### v0.3.0 — 2026-03-12
 **MassUpdate管理ページ追加**
 - 🔄 MassUpdate管理ページ新規作成（専用ページ）
