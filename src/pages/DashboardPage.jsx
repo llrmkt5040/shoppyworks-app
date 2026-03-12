@@ -403,6 +403,7 @@ export default function DashboardPage({ uid: propUid }) {
               <div className="fade-up">
                 <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>📆 直近7件の推移</div>
                 <TrendCharts data={weekData} />
+                <GoalAchievementBlock uid={propUid || auth.currentUser?.uid} latest={latest} label="週次" />
               </div>
             )}
 
@@ -411,6 +412,7 @@ export default function DashboardPage({ uid: propUid }) {
               <div className="fade-up">
                 <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>📊 直近30件の推移</div>
                 <TrendCharts data={monthData} />
+                <GoalAchievementBlock uid={propUid || auth.currentUser?.uid} latest={latest} label="月次" />
               </div>
             )}
 
@@ -425,6 +427,71 @@ export default function DashboardPage({ uid: propUid }) {
     </div>
   )
 }
+
+function GoalAchievementBlock({ uid, latest, label }) {
+  const [goals, setGoals] = useState(null)
+  const [fxRate, setFxRate] = useState(1)
+  useEffect(() => { if (uid) load() }, [uid])
+  async function load() {
+    try {
+      const { db } = await import('../lib/firebase')
+      const { doc, getDoc } = await import('firebase/firestore')
+      const [goalSnap, fxSnap] = await Promise.all([
+        getDoc(doc(db, 'user_goals', uid)),
+        getDoc(doc(db, 'fx_rates', uid))
+      ])
+      if (goalSnap.exists()) setGoals(goalSnap.data())
+      if (fxSnap.exists()) setFxRate(Number(fxSnap.data().rate_php_jpy) || 1)
+    } catch(e) {}
+  }
+  if (!goals || !latest) return null
+  const thisMonth = goals?.thismonth || {}
+  const salesJpy = (latest.kpis?.totalSales || 0) * fxRate
+  const ITEMS = [
+    { key:'sales',  label:'月間売上', unit:'¥', actual: salesJpy,                  target: parseFloat(thisMonth.sales||0),  color:'#f97316' },
+    { key:'orders', label:'受注数',   unit:'件', actual: latest.kpis?.totalOrders||0, target: parseFloat(thisMonth.orders||0), color:'#a855f7' },
+    { key:'ctr',    label:'CTR',     unit:'%',  actual: latest.kpis?.avgCtr||0,      target: parseFloat(thisMonth.ctr||0),   color:'#2563eb' },
+    { key:'cvr',    label:'CVR',     unit:'%',  actual: latest.kpis?.avgCvr||0,      target: parseFloat(thisMonth.cvr||0),   color:'#16a34a' },
+  ].filter(i => i.target > 0)
+  if (ITEMS.length === 0) return (
+    <div style={{ marginTop:'1rem', padding:'1rem', borderRadius:12, border:'1px dashed var(--rim)', textAlign:'center', fontSize:'0.75rem', color:'var(--dim2)' }}>
+      🏆 目標管理タブで今月の目標を設定すると達成率が表示されます
+    </div>
+  )
+  const now = new Date()
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate()
+  const daysElapsed = now.getDate()
+  const expectedPct = Math.round((daysElapsed / daysInMonth) * 100)
+  return (
+    <div className="card" style={{ padding:'1.25rem', marginTop:'1rem', borderTop:'2px solid var(--orange)' }}>
+      <div style={{ fontSize:'0.65rem', fontWeight:700, color:'var(--orange)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1.25rem' }}>
+        🏆 今月の目標達成率　<span style={{ color:'var(--dim2)', fontWeight:400 }}>期待値: {expectedPct}%（{daysElapsed}/{daysInMonth}日）</span>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:'1rem' }}>
+        {ITEMS.map(item => {
+          const pct = Math.min(Math.round((item.actual / item.target) * 100), 999)
+          const statusColor = pct >= 100 ? 'var(--green)' : pct >= expectedPct - 5 ? 'var(--yellow)' : 'var(--red)'
+          const fmt = (v) => item.unit === '¥' ? '¥'+Math.round(v).toLocaleString() : item.unit === '%' ? v.toFixed(2)+'%' : Math.round(v).toLocaleString()+item.unit
+          return (
+            <div key={item.key} style={{ padding:'1rem', borderRadius:12, border:'1px solid var(--rim)', borderTop:'2px solid '+item.color, background:'rgba(255,255,255,0.02)' }}>
+              <div style={{ fontSize:'0.62rem', fontWeight:700, color:'var(--dim2)', marginBottom:'0.5rem', textTransform:'uppercase' }}>{item.label}</div>
+              <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'2.2rem', color: statusColor, lineHeight:1 }}>{pct}%</div>
+              <div style={{ fontSize:'0.62rem', color:'var(--dim2)', marginTop:'0.3rem' }}>{fmt(item.actual)} / {fmt(item.target)}</div>
+              <div style={{ height:4, borderRadius:2, background:'var(--rim)', marginTop:'0.6rem', overflow:'hidden', position:'relative' }}>
+                <div style={{ height:'100%', width:Math.min(pct,100)+'%', background:statusColor, borderRadius:2, transition:'width 0.6s' }} />
+                <div style={{ position:'absolute', top:0, bottom:0, left:Math.min(expectedPct,100)+'%', width:2, background:'rgba(255,255,255,0.35)' }} />
+              </div>
+              <div style={{ fontSize:'0.58rem', color:'var(--dim2)', marginTop:'0.3rem' }}>
+                {pct >= 100 ? '🎉 目標達成！' : pct >= expectedPct - 5 ? '🟡 ペースOK' : '🔴 ペース遅れ'}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 
 function GoalPaceBar({ label, unit, color, actual, target, daysElapsed, daysInMonth, fxRate=1 }) {
   if (!target || parseFloat(target) === 0 || actual === null || actual === undefined) return null
