@@ -426,7 +426,7 @@ export default function DashboardPage({ uid: propUid }) {
   )
 }
 
-function GoalPaceBar({ label, unit, color, actual, target, daysElapsed, daysInMonth }) {
+function GoalPaceBar({ label, unit, color, actual, target, daysElapsed, daysInMonth, fxRate=1 }) {
   if (!target || parseFloat(target) === 0 || actual === null || actual === undefined) return null
   const targetNum = parseFloat(target)
   const expectedPct = Math.round((daysElapsed / daysInMonth) * 100)
@@ -434,13 +434,13 @@ function GoalPaceBar({ label, unit, color, actual, target, daysElapsed, daysInMo
   const paceOk = actualPct >= expectedPct - 5
   const statusColor = actualPct >= 100 ? 'var(--green)' : paceOk ? 'var(--yellow)' : 'var(--red)'
   const statusIcon = actualPct >= 100 ? '🎉' : paceOk ? '🟡' : '🔴'
-  const fmt = (v) => unit === '₱' ? '₱' + Math.round(v).toLocaleString() : v.toFixed(2) + unit
+  const fmt = (v, sub) => unit === '¥' ? '¥' + Math.round(v).toLocaleString() + (sub !== undefined ? '（₱'+Math.round(sub).toLocaleString()+'）' : '') : unit === '%' ? v.toFixed(2) + '%' : Math.round(v).toLocaleString() + unit
   return (
     <div style={{ marginBottom:'0.6rem' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.25rem' }}>
         <span style={{ fontSize:'0.68rem', fontWeight:700, color:'var(--dim2)' }}>{statusIcon} {label}</span>
         <span style={{ fontSize:'0.68rem', fontWeight:700, color: statusColor }}>
-          {fmt(actual)} / {fmt(targetNum)}　{actualPct}%
+          {fmt(actual, unit==='¥' ? actual/fxRate : undefined)} / {fmt(targetNum)}　{actualPct}%
         </span>
       </div>
       <div style={{ position:'relative', height:6, borderRadius:3, background:'var(--rim)', overflow:'hidden' }}>
@@ -456,13 +456,18 @@ function GoalPaceBar({ label, unit, color, actual, target, daysElapsed, daysInMo
 
 function GoalPaceBlock({ uid, latest }) {
   const [goals, setGoals] = useState(null)
+  const [fxRate, setFxRate] = useState(1)
   useEffect(() => { if (uid) load() }, [uid])
   async function load() {
     try {
       const { db } = await import('../lib/firebase')
       const { doc, getDoc } = await import('firebase/firestore')
-      const snap = await getDoc(doc(db, 'user_goals', uid))
-      if (snap.exists()) setGoals(snap.data())
+      const [goalSnap, fxSnap] = await Promise.all([
+        getDoc(doc(db, 'user_goals', uid)),
+        getDoc(doc(db, 'fx_rates', uid))
+      ])
+      if (goalSnap.exists()) setGoals(goalSnap.data())
+      if (fxSnap.exists()) setFxRate(Number(fxSnap.data().rate_php_jpy) || 1)
     } catch(e) {}
   }
   const now = new Date()
@@ -471,8 +476,10 @@ function GoalPaceBlock({ uid, latest }) {
   const thisMonth = goals?.thismonth || {}
   const hasAnyGoal = Object.values(thisMonth).some(v => v && parseFloat(v) > 0)
   if (!goals || !hasAnyGoal || !latest) return null
+  // ₱実績を¥換算
+  const salesJpy = (latest.kpis?.totalSales || 0) * fxRate
   const GOAL_KEYS = [
-    { key:'sales',  label:'月間売上',   unit:'₱', actual: latest.kpis?.totalSales },
+    { key:'sales',  label:'月間売上',   unit:'¥', actual: salesJpy },
     { key:'orders', label:'月間受注数', unit:'件', actual: latest.kpis?.totalOrders },
     { key:'ctr',    label:'CTR',       unit:'%',  actual: latest.kpis?.avgCtr },
     { key:'cvr',    label:'CVR',       unit:'%',  actual: latest.kpis?.avgCvr },
@@ -482,15 +489,16 @@ function GoalPaceBlock({ uid, latest }) {
   return (
     <div className="card" style={{ padding:'1.25rem', marginBottom:'1rem', borderTop:'2px solid var(--orange)' }}>
       <div style={{ fontSize:'0.65rem', fontWeight:700, color:'var(--orange)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>
-        🏆 今月の目標ペース　<span style={{ color:'var(--dim2)', fontWeight:400 }}>{daysElapsed}日経過 / {daysInMonth}日</span>
+        🏆 今月の目標ペース　<span style={{ color:'var(--dim2)', fontWeight:400 }}>{daysElapsed}日経過 / {daysInMonth}日　</span>
+        <span style={{ color:'var(--dim2)', fontWeight:400 }}>💱 ₱1=¥{fxRate}</span>
       </div>
       {targets.map(g => (
         <GoalPaceBar key={g.key} label={g.label} unit={g.unit} color={g.color}
           actual={g.actual} target={thisMonth[g.key]}
-          daysElapsed={daysElapsed} daysInMonth={daysInMonth} />
+          daysElapsed={daysElapsed} daysInMonth={daysInMonth} fxRate={fxRate} />
       ))}
       <div style={{ marginTop:'0.75rem', fontSize:'0.65rem', color:'var(--dim2)', textAlign:'right' }}>
-        目標は <span style={{ color:'var(--orange)', cursor:'pointer', textDecoration:'underline' }} onClick={() => {}}>🏆 目標管理</span> タブで変更できます
+        目標は <span style={{ color:'var(--orange)', cursor:'pointer', textDecoration:'underline' }}>🏆 目標管理</span> タブで変更できます
       </div>
     </div>
   )
@@ -504,17 +512,18 @@ function GoalsTab({ uid, latest }) {
     { id:'thismonth', label:'📅 今月の目標',            desc:new Date().getFullYear()+'年'+(new Date().getMonth()+1)+'月' },
   ]
   const GOAL_KEYS = [
-    { key:'sales',   label:'月間売上',   unit:'₱', color:'var(--orange)', placeholder:'例: 50000' },
+    { key:'sales',   label:'月間売上',   unit:'¥', color:'var(--orange)', placeholder:'例: 800000' },
     { key:'orders',  label:'月間受注数', unit:'件', color:'var(--purple)', placeholder:'例: 100' },
     { key:'ctr',     label:'CTR目標',   unit:'%',  color:'#2563eb',       placeholder:'例: 5.0' },
     { key:'cvr',     label:'CVR目標',   unit:'%',  color:'#16a34a',       placeholder:'例: 8.0' },
-    { key:'gross',   label:'粗利',      unit:'₱', color:'#10b981',       placeholder:'例: 20000' },
-    { key:'profit',  label:'営業利益',  unit:'₱', color:'#06b6d4',       placeholder:'例: 15000' },
+    { key:'gross',   label:'粗利',      unit:'¥', color:'#10b981',       placeholder:'例: 300000' },
+    { key:'profit',  label:'営業利益',  unit:'¥', color:'#06b6d4',       placeholder:'例: 200000' },
   ]
   const [goals, setGoals] = useState({})
   const [editing, setEditing] = useState('thismonth')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [fxRate, setFxRate] = useState(1)
 
   useEffect(() => { if (uid) loadGoals() }, [uid])
 
@@ -522,8 +531,12 @@ function GoalsTab({ uid, latest }) {
     try {
       const { db } = await import('../lib/firebase')
       const { doc, getDoc } = await import('firebase/firestore')
-      const snap = await getDoc(doc(db, 'user_goals', uid))
-      if (snap.exists()) setGoals(snap.data())
+      const [goalSnap, fxSnap] = await Promise.all([
+        getDoc(doc(db, 'user_goals', uid)),
+        getDoc(doc(db, 'fx_rates', uid))
+      ])
+      if (goalSnap.exists()) setGoals(goalSnap.data())
+      if (fxSnap.exists()) setFxRate(Number(fxSnap.data().rate_php_jpy) || 1)
     } catch(e) { console.error(e) }
   }
 
@@ -545,7 +558,7 @@ function GoalsTab({ uid, latest }) {
 
   function getActual(key) {
     if (!latest) return null
-    const map = { sales: latest.kpis?.totalSales, orders: latest.kpis?.totalOrders, ctr: latest.kpis?.avgCtr, cvr: latest.kpis?.avgCvr }
+    const map = { sales: (latest.kpis?.totalSales||0) * fxRate, orders: latest.kpis?.totalOrders, ctr: latest.kpis?.avgCtr, cvr: latest.kpis?.avgCvr }
     return map[key] ?? null
   }
 
@@ -594,7 +607,7 @@ function GoalsTab({ uid, latest }) {
                 {editing === 'thismonth' && actual !== null && (
                   <div style={{ marginTop:'0.35rem' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.62rem', color:'var(--dim2)', marginBottom:'0.2rem' }}>
-                      <span>現在: {g.unit==='₱'?'₱'+Math.round(actual).toLocaleString():actual?.toFixed(2)+g.unit}</span>
+                      <span>現在: {g.unit==='¥'?'¥'+Math.round(actual).toLocaleString()+'（₱'+Math.round(actual/fxRate).toLocaleString()+'）':g.unit==='%'?actual?.toFixed(2)+'%':Math.round(actual).toLocaleString()+g.unit}</span>
                       {rate !== null && <span style={{ color:rate>=100?'var(--green)':rate>=70?'var(--yellow)':'var(--red)', fontWeight:700 }}>{rate}%</span>}
                     </div>
                     {val && <div style={{ height:4, borderRadius:2, background:'var(--rim)', overflow:'hidden' }}>
@@ -631,7 +644,7 @@ function GoalsTab({ uid, latest }) {
                     {rate !== null ? rate+'%' : '-'}
                   </div>
                   <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.2rem' }}>
-                    {g.unit==='₱'?'₱'+Math.round(actual).toLocaleString():actual?.toFixed(2)+g.unit} / {g.unit==='₱'?'₱'+target.toLocaleString():target+g.unit}
+                    {g.unit==='¥'?'¥'+Math.round(actual).toLocaleString()+'（₱'+Math.round(actual/fxRate).toLocaleString()+'）':g.unit==='%'?actual?.toFixed(2)+'%':Math.round(actual).toLocaleString()+g.unit} / {g.unit==='¥'?'¥'+target.toLocaleString():g.unit==='%'?target+'%':target+g.unit}
                   </div>
                   <div style={{ height:3, borderRadius:2, background:'var(--rim)', marginTop:'0.4rem', overflow:'hidden' }}>
                     <div style={{ height:'100%', width:Math.min(rate||0,100)+'%', background:rate>=100?'var(--green)':rate>=70?'var(--yellow)':'var(--red)', borderRadius:2 }} />
