@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import NoticePage from "../pages/NoticePage"
 import { auth, db } from "../lib/firebase"
 import { onAuthStateChanged, signOut } from "firebase/auth"
 import { collection, getDocs, doc, getDoc } from "firebase/firestore"
@@ -14,15 +15,19 @@ import TaskChecklist, { useUncompletedCount } from "./TaskChecklist"
 import SettingsPage from "../pages/SettingsPage"
 
 const NAV = [
-  { id: "dashboard",  icon: "📈", label: "ShopeeWorksDashboard", sub: "数値管理"   },
-  { id: "analyzer",   icon: "📊", label: "ShopeeAnalyzer",      sub: "商品分析"   },
-  { id: "actionlog",  icon: "📅", label: "ShopeeDiary",         sub: "日次管理"   },
-  { id: "inventory",  icon: "📦", label: "ShopeeStockManager",  sub: "在庫棚卸"   },
-  { id: "requests",   icon: "🛍️", label: "PasabuyManager",      sub: "御用聞き"   },
-  { id: "shopee",    icon: "📂", label: "ShopeeManager",   sub: "一元管理"   },
-  { id: "massupdate", icon: "🔄", label: "MassUpdate管理",  sub: "出品管理"   },
-  { id: "accounthealth", icon: "🏥", label: "アカウントヘルス", sub: "健全性管理" },
-  { id: "settings",   icon: "⚙️", label: "設定",                sub: ""           },
+  { id: "dashboard",     icon: "📈", label: "Dashboard",            sub: "数値管理",   section: null },
+  { id: "notice",        icon: "📢", label: "お知らせ",                sub: "更新・予定"  },
+  { id: "_daily",        icon: "",    label: "日次業務",                sub: "",           section: "header" },
+  { id: "actionlog",     icon: "📅", label: "ShopeeDiary",             sub: "日次記録"   },
+  { id: "analyzer",      icon: "📊", label: "ShopeeAnalyzer",          sub: "商品分析"   },
+  { id: "shopee",        icon: "📂", label: "ShopeeManager",           sub: "注文管理"   },
+  { id: "_spot",         icon: "",    label: "都度業務",                sub: "",           section: "header" },
+  { id: "inventory",     icon: "📦", label: "ShopeeStockManager",      sub: "在庫棚卸"   },
+  { id: "requests",      icon: "🛍️", label: "PasabuyManager",          sub: "御用聞き"   },
+  { id: "_weekly",       icon: "",    label: "週次業務",                sub: "",           section: "header" },
+  { id: "massupdate",    icon: "🔄", label: "MassUpdate管理",          sub: "出品管理"   },
+  { id: "accounthealth", icon: "🏥", label: "アカウントヘルス",        sub: "健全性管理" },
+  { id: "settings",      icon: "⚙️", label: "設定",                    sub: ""           },
 ]
 
 export default function AppLayout() {
@@ -96,6 +101,7 @@ export default function AppLayout() {
     )
     switch (page) {
       case "dashboard": return <DashboardPage uid={uid} />
+      case "notice":    return <NoticePage />
       case "analyzer":  return <AnalyzerPage uid={uid} onNavigate={setPage} />
       case "actionlog": return <ActionLogPage uid={uid} />
       case "inventory": return <InventoryPage uid={uid} />
@@ -119,6 +125,16 @@ export default function AppLayout() {
         </div>
         <nav style={{ flex: 1, padding: "0.75rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.25rem", overflowY: "auto" }}>
           {NAV.map(n => {
+            // セクションヘッダー
+            if (n.section === 'header') {
+              return sideOpen ? (
+                <div key={n.id} style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--dim2)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0.75rem 0.75rem 0.25rem', opacity: 0.6 }}>
+                  {n.label}
+                </div>
+              ) : (
+                <div key={n.id} style={{ borderTop: '1px solid var(--rim)', margin: '0.4rem 0.5rem' }} />
+              )
+            }
             const active = page === n.id
             return (
               <button key={n.id} onClick={() => setPage(n.id)} style={{ display: "flex", alignItems: "center", gap: "0.65rem", padding: sideOpen ? "0.6rem 0.75rem" : "0.6rem", borderRadius: 8, border: "none", background: active ? "rgba(251,146,60,0.15)" : "transparent", outline: active ? "1px solid rgba(251,146,60,0.3)" : "none", color: active ? "var(--orange)" : "var(--dim2)", cursor: "pointer", textAlign: "left", width: "100%", justifyContent: sideOpen ? "flex-start" : "center", transition: "background 0.15s" }}>

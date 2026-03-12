@@ -10,9 +10,11 @@ export default function DashboardPage({ uid: propUid }) {
   const [diaryLogs, setDiaryLogs] = useState([])
   const [fxRate, setFxRate] = useState(1)
   const [shopeeOrders, setShopeeOrders] = useState({ total: 0, month: 0, cancelled: 0, toShip: 0, monthRevenue: 0 })
-  const [inventoryCost, setInventoryCost] = useState(0)
+  const [inventoryCost, setInventoryCost] = useState({})
+  const [monthOrders, setMonthOrders] = useState([])
   const [shopeeIncome, setShopeeIncome] = useState({ unreleased: 0, released: 0 })
   const [monthlyDiarySales, setMonthlyDiarySales] = useState({ php: 0, jpy: 0, days: 0 })
+  const [weeklyDiarySales, setWeeklyDiarySales] = useState({ php: 0, jpy: 0, days: 0, cvr: 0, visitors: 0, orders: 0, followers: 0 })
   const [todayDiarySales, setTodayDiarySales] = useState({ php: 0, jpy: 0 })
   const dropRef = useRef()
   const [tab, setTab] = useState('yesterday')
@@ -76,7 +78,21 @@ export default function DashboardPage({ uid: propUid }) {
       const monthLogs = allLogs.filter(l => (l.date || '').startsWith(nowStr))
       const monthPhp = monthLogs.reduce((s, l) => s + (Number(l.sales_php) || 0), 0)
       const monthJpy = monthLogs.reduce((s, l) => s + (Number(l.sales_jpy) || 0), 0)
-      setMonthlyDiarySales({ php: monthPhp, jpy: monthJpy, days: monthLogs.length })
+      const monthVisitors = monthLogs.reduce((s, l) => s + (Number(l.visitors) || 0), 0)
+      const monthOrdersD  = monthLogs.reduce((s, l) => s + (Number(l.orders)   || 0), 0)
+      const monthlyCvr = monthVisitors > 0 ? Math.round(monthOrdersD / monthVisitors * 10000) / 100 : 0
+      setMonthlyDiarySales({ php: monthPhp, jpy: monthJpy, days: monthLogs.length, cvr: monthlyCvr, visitors: monthVisitors, orders: monthOrdersD })
+      // 週次集計（直近7日）
+      const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
+      const weekStr = weekAgo.toISOString().slice(0, 10)
+      const weekLogs = allLogs.filter(l => (l.date || '') >= weekStr)
+      const weekPhp = weekLogs.reduce((s, l) => s + (Number(l.sales_php) || 0), 0)
+      const weekJpy = weekLogs.reduce((s, l) => s + (Number(l.sales_jpy) || 0), 0)
+      const weekVisitors = weekLogs.reduce((s, l) => s + (Number(l.visitors) || 0), 0)
+      const weekOrdersD  = weekLogs.reduce((s, l) => s + (Number(l.orders)   || 0), 0)
+      const weekFollowers = weekLogs.length > 0 ? Number(weekLogs[0].followers) || 0 : 0
+      const weeklyCvr = weekVisitors > 0 ? Math.round(weekOrdersD / weekVisitors * 10000) / 100 : 0
+      setWeeklyDiarySales({ php: weekPhp, jpy: weekJpy, days: weekLogs.length, cvr: weeklyCvr, visitors: weekVisitors, orders: weekOrdersD, followers: weekFollowers })
       // 当日
       const todayLog = allLogs.find(l => l.date === todayStr2)
       const visitors = Number(todayLog?.visitors) || 0
@@ -106,6 +122,7 @@ export default function DashboardPage({ uid: propUid }) {
       const allOrders = ordDocs.flatMap(d => d.orders || [])
 
       const monthOrders = allOrders.filter(o => (o.orderDate || '').startsWith(nowStr2))
+      setMonthOrders(monthOrders)
       const monthRevenue = monthOrders.filter(o => o.status !== 'Cancelled').reduce((s, o) => s + (Number(o.total) || 0), 0)
       // 前日分
       const ydayDate = new Date(); ydayDate.setDate(ydayDate.getDate() - 1)
@@ -116,9 +133,9 @@ export default function DashboardPage({ uid: propUid }) {
       // 売れた商品TOP5（前日）
       const productMap = {}
       ydayOrders.filter(o => o.status !== 'Cancelled').forEach(o => {
-        const name = o.productName || o.name || '不明'
+        const name = o.product || o.productName || o.name || '不明'
         if (!productMap[name]) productMap[name] = { name, qty: 0, revenue: 0 }
-        productMap[name].qty += Number(o.quantity) || 1
+        productMap[name].qty += Number(o.qty) || 1
         productMap[name].revenue += Number(o.total) || 0
       })
       const topProducts = Object.values(productMap).sort((a,b) => b.revenue - a.revenue).slice(0, 5)
@@ -149,17 +166,20 @@ export default function DashboardPage({ uid: propUid }) {
           return s + Math.abs(Number(sum.commissionFee)||0)
                    + Math.abs(Number(sum.serviceFee)||0)
                    + Math.abs(Number(sum.transactionFee)||0)
+                   + Math.abs(Number(sum.shippingFee)||0)
         }, 0)
       setShopeeIncome({ unreleased: unreleasedTotal, released: releasedTotal, fees: feesTotal })
     } catch(e) { console.error('shopee manager fetch error:', e) }
-    // Inventory 仕入原価取得
+    // Inventory 仕入原価取得（SKU別単価マップ）
     try {
       const uid4 = propUid || auth.currentUser?.uid || 'anonymous'
       const invSnap = await getDocs(collection(db, 'inventory_items'))
       const invDocs = invSnap.docs.map(d => d.data()).filter(d => d.userId === uid4)
       const allItems = invDocs.flatMap(d => d.items || [])
-      const totalCostPhp = allItems.reduce((s, i) => s + (Number(i.costPhp)||0) * (Number(i.qty)||0), 0)
-      setInventoryCost(totalCostPhp)
+      // SKU→単価マップ
+      const costMap = {}
+      allItems.forEach(i => { if (i.sku) costMap[i.sku] = Number(i.costPhp) || 0 })
+      setInventoryCost(costMap)
     } catch(e) { console.error('inventory fetch error:', e) }
     // 為替レート取得
     try {
@@ -387,7 +407,7 @@ export default function DashboardPage({ uid: propUid }) {
               <div className="fade-up">
 
                 {/* 1. 今月の目標ペース */}
-                <GoalPaceBlock uid={propUid || auth.currentUser?.uid} latest={latest} monthlyDiarySales={monthlyDiarySales} fxRateOverride={fxRate} shopeeIncome={shopeeIncome} inventoryCost={inventoryCost} />
+                <GoalPaceBlock uid={propUid || auth.currentUser?.uid} latest={latest} monthlyDiarySales={monthlyDiarySales} fxRateOverride={fxRate} shopeeIncome={shopeeIncome} inventoryCost={inventoryCost} monthOrders={monthOrders} weeklyDiarySales={weeklyDiarySales} todayDiarySales={todayDiarySales} period='today' />
 
                 {/* 2. Diary KPI（前日） */}
                 <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📅 前日の実績（Diary）</div>
@@ -407,7 +427,6 @@ export default function DashboardPage({ uid: propUid }) {
                   { l:'前日キャンセル', v: shopeeOrders.ydayCancelled+'件', a: shopeeOrders.ydayCancelled > 0 ? 'var(--red)' : 'var(--green)' },
                   { l:'前日平均単価', v: shopeeOrders.ydayOrders > 0 ? '₱'+Math.round(shopeeOrders.ydayRevenue / shopeeOrders.ydayOrders).toLocaleString() : '-', a:'var(--purple)' },
                   { l:'発送待ち', v: shopeeOrders.toShip+'件', a: shopeeOrders.toShip > 0 ? 'var(--yellow, #f59e0b)' : 'var(--green)' },
-                  { l:'未リリース収益', v: shopeeIncome.unreleased > 0 ? '₱'+Math.round(shopeeIncome.unreleased).toLocaleString() : '-', a:'var(--ai)' },
                 ]} />
 
                 {/* 売れた商品TOP5（前日） */}
@@ -436,24 +455,6 @@ export default function DashboardPage({ uid: propUid }) {
                       { l:'緊急改善', v:(latest.kpis?.urgentCount||0)+'件', a:(latest.kpis?.urgentCount||0)>0?'var(--red)':'var(--green)' },
                     ]} />
                   </>
-                )}
-
-                {/* 5. ShopeeDiary最新ログ */}
-                {diaryLogs.length > 0 && (
-                  <div className="card" style={{ padding:'1.1rem', marginTop:'1rem', marginBottom:'1rem' }}>
-                    <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.75rem' }}>📅 ShopeeDiary 最新ログ</div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:'0.4rem' }}>
-                      {diaryLogs.slice(0,5).map((l, i) => (
-                        <div key={i} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto auto', gap:'0.75rem', alignItems:'center', padding:'0.4rem 0', borderBottom: i<4?'1px solid var(--rim)':'none' }}>
-                          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.65rem', color:'var(--dim2)', whiteSpace:'nowrap' }}>{l.date}</span>
-                          <span style={{ fontSize:'0.72rem', color:'var(--dim2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.memo || '-'}</span>
-                          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.72rem', color:'var(--orange)', whiteSpace:'nowrap' }}>₱{Number(l.sales_php||0).toLocaleString()}</span>
-                          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.68rem', color:'var(--dim2)', whiteSpace:'nowrap' }}>出品:{l.listings||'-'}</span>
-                          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.68rem', color:'var(--dim2)', whiteSpace:'nowrap' }}>❤️{l.followers||'-'}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 )}
 
                 {/* 6. 前回比（パフォーマンスレポート） */}
@@ -505,8 +506,65 @@ export default function DashboardPage({ uid: propUid }) {
             {/* 週次タブ */}
             {tab === 'weekly' && (
               <div className="fade-up">
-                <GoalAchievementBlock uid={propUid || auth.currentUser?.uid} latest={latest} label="週次" />
-                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1rem 0' }}>📆 直近7件の推移</div>
+                {/* 目標ペース */}
+                <GoalPaceBlock uid={propUid || auth.currentUser?.uid} latest={latest} monthlyDiarySales={monthlyDiarySales} fxRateOverride={fxRate} shopeeIncome={shopeeIncome} inventoryCost={inventoryCost} monthOrders={monthOrders} weeklyDiarySales={weeklyDiarySales} todayDiarySales={todayDiarySales} period='thisweek' />
+
+                {/* Diary週次KPI */}
+                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📆 直近7日間（Diary集計）</div>
+                <KpiCards items={[
+                  { l:'週次売上', v: weeklyDiarySales.jpy ? '¥'+weeklyDiarySales.jpy.toLocaleString() : weeklyDiarySales.php ? '₱'+Math.round(weeklyDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: weeklyDiarySales.php ? '₱'+Math.round(weeklyDiarySales.php).toLocaleString() : '' },
+                  { l:'週次注文数', v: weeklyDiarySales.orders ? weeklyDiarySales.orders+'件' : '-', a:'var(--blue, #3b82f6)' },
+                  { l:'週次CVR', v: weeklyDiarySales.cvr ? weeklyDiarySales.cvr.toFixed(2)+'%' : '-', a: weeklyDiarySales.cvr > 5 ? 'var(--green)' : weeklyDiarySales.cvr < 3 ? 'var(--red)' : 'var(--yellow)', sub: 'V:'+weeklyDiarySales.visitors+' O:'+weeklyDiarySales.orders },
+                  { l:'フォロワー', v: weeklyDiarySales.followers ? Number(weeklyDiarySales.followers).toLocaleString() : '-', a:'var(--ai)' },
+                  { l:'記録日数', v: weeklyDiarySales.days+'日', a:'var(--dim2)' },
+                ]} />
+
+                {/* パフォーマンスKPI */}
+                {latest && (
+                  <>
+                    <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📈 パフォーマンス（最新アップ）</div>
+                    <KpiCards items={[
+                      { l:'商品数', v:(latest.kpis?.productCount||0)+'件', a:'var(--purple)' },
+                      { l:'平均CTR', v:(latest.kpis?.avgCtr||0).toFixed(2)+'%', a:(latest.kpis?.avgCtr||0)>3?'var(--green)':'var(--yellow)', sub:'基準: 3.00%以上' },
+                      { l:'平均CVR', v:(latest.kpis?.avgCvr||0).toFixed(2)+'%', a:(latest.kpis?.avgCvr||0)>5?'var(--green)':(latest.kpis?.avgCvr||0)<3?'var(--red)':'var(--yellow)', sub:'基準: 5.00%以上' },
+                      { l:'緊急改善', v:(latest.kpis?.urgentCount||0)+'件', a:(latest.kpis?.urgentCount||0)>0?'var(--red)':'var(--green)' },
+                    ]} />
+                  </>
+                )}
+
+                {/* 商品ランキング */}
+                {histories.length >= 2 && ranking && (
+                  <div className="card" style={{ padding:'1.25rem', marginTop:'1rem' }}>
+                    <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'1rem' }}>🏆 商品ランキング（前回比）</div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem' }}>
+                      <div>
+                        <div style={{ fontSize:'0.68rem', fontWeight:700, color:'var(--green)', marginBottom:'0.4rem' }}>▲ 改善トップ5</div>
+                        {ranking.improved.length === 0 && <div style={{ fontSize:'0.72rem', color:'var(--dim)' }}>改善商品なし</div>}
+                        {ranking.improved.map((p,i) => (
+                          <div key={i} style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.35rem 0.6rem', background:'rgba(22,163,74,0.08)', borderRadius:6, marginBottom:'0.3rem' }}>
+                            <span style={{ fontFamily:"'Bebas Neue',sans-serif", color:'var(--green)', fontSize:'1rem', minWidth:'1.2rem' }}>{i+1}</span>
+                            <span style={{ fontSize:'0.7rem', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                            <span style={{ fontSize:'0.68rem', fontWeight:700, color:'var(--green)', whiteSpace:'nowrap' }}>+₱{p.salesDiff.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <div style={{ fontSize:'0.68rem', fontWeight:700, color:'var(--red)', marginBottom:'0.4rem' }}>▼ 要注意5</div>
+                        {ranking.worsened.length === 0 && <div style={{ fontSize:'0.72rem', color:'var(--dim)' }}>悪化商品なし</div>}
+                        {ranking.worsened.map((p,i) => (
+                          <div key={i} style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.35rem 0.6rem', background:'rgba(220,38,38,0.08)', borderRadius:6, marginBottom:'0.3rem' }}>
+                            <span style={{ fontFamily:"'Bebas Neue',sans-serif", color:'var(--red)', fontSize:'1rem', minWidth:'1.2rem' }}>{i+1}</span>
+                            <span style={{ fontSize:'0.7rem', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                            <span style={{ fontSize:'0.68rem', fontWeight:700, color:'var(--red)', whiteSpace:'nowrap' }}>₱{p.salesDiff.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* グラフ */}
+                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📆 直近7件の推移</div>
                 <TrendCharts data={weekData} />
               </div>
             )}
@@ -514,8 +572,65 @@ export default function DashboardPage({ uid: propUid }) {
             {/* 月次タブ */}
             {tab === 'monthly' && (
               <div className="fade-up">
-                <GoalAchievementBlock uid={propUid || auth.currentUser?.uid} latest={latest} label="月次" />
-                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1rem 0' }}>📊 直近30件の推移</div>
+                {/* 目標ペース */}
+                <GoalPaceBlock uid={propUid || auth.currentUser?.uid} latest={latest} monthlyDiarySales={monthlyDiarySales} fxRateOverride={fxRate} shopeeIncome={shopeeIncome} inventoryCost={inventoryCost} monthOrders={monthOrders} weeklyDiarySales={weeklyDiarySales} todayDiarySales={todayDiarySales} period='thismonth' />
+
+                {/* Diary月次KPI */}
+                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📊 今月累計（Diary集計）</div>
+                <KpiCards items={[
+                  { l:'月次売上', v: monthlyDiarySales.jpy ? '¥'+monthlyDiarySales.jpy.toLocaleString() : monthlyDiarySales.php ? '₱'+Math.round(monthlyDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: monthlyDiarySales.php ? '₱'+Math.round(monthlyDiarySales.php).toLocaleString()+' / '+monthlyDiarySales.days+'日分' : '' },
+                  { l:'月次注文数', v: monthlyDiarySales.orders ? monthlyDiarySales.orders+'件' : '-', a:'var(--blue, #3b82f6)' },
+                  { l:'月次CVR', v: monthlyDiarySales.cvr ? monthlyDiarySales.cvr.toFixed(2)+'%' : '-', a: monthlyDiarySales.cvr > 5 ? 'var(--green)' : monthlyDiarySales.cvr < 3 ? 'var(--red)' : 'var(--yellow)', sub: 'V:'+monthlyDiarySales.visitors+' O:'+monthlyDiarySales.orders },
+                  { l:'今月受注（Manager）', v: shopeeOrders.month+'件', a:'var(--purple)', sub: shopeeOrders.monthRevenue > 0 ? '₱'+Math.round(shopeeOrders.monthRevenue).toLocaleString() : '' },
+                  { l:'記録日数', v: monthlyDiarySales.days+'日', a:'var(--dim2)' },
+                ]} />
+
+                {/* パフォーマンスKPI */}
+                {latest && (
+                  <>
+                    <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📈 パフォーマンス（最新アップ）</div>
+                    <KpiCards items={[
+                      { l:'商品数', v:(latest.kpis?.productCount||0)+'件', a:'var(--purple)' },
+                      { l:'平均CTR', v:(latest.kpis?.avgCtr||0).toFixed(2)+'%', a:(latest.kpis?.avgCtr||0)>3?'var(--green)':'var(--yellow)', sub:'基準: 3.00%以上' },
+                      { l:'平均CVR', v:(latest.kpis?.avgCvr||0).toFixed(2)+'%', a:(latest.kpis?.avgCvr||0)>5?'var(--green)':(latest.kpis?.avgCvr||0)<3?'var(--red)':'var(--yellow)', sub:'基準: 5.00%以上' },
+                      { l:'緊急改善', v:(latest.kpis?.urgentCount||0)+'件', a:(latest.kpis?.urgentCount||0)>0?'var(--red)':'var(--green)' },
+                    ]} />
+                  </>
+                )}
+
+                {/* 商品ランキング */}
+                {histories.length >= 2 && ranking && (
+                  <div className="card" style={{ padding:'1.25rem', marginTop:'1rem' }}>
+                    <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'1rem' }}>🏆 商品ランキング（前回比）</div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem' }}>
+                      <div>
+                        <div style={{ fontSize:'0.68rem', fontWeight:700, color:'var(--green)', marginBottom:'0.4rem' }}>▲ 改善トップ5</div>
+                        {ranking.improved.length === 0 && <div style={{ fontSize:'0.72rem', color:'var(--dim)' }}>改善商品なし</div>}
+                        {ranking.improved.map((p,i) => (
+                          <div key={i} style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.35rem 0.6rem', background:'rgba(22,163,74,0.08)', borderRadius:6, marginBottom:'0.3rem' }}>
+                            <span style={{ fontFamily:"'Bebas Neue',sans-serif", color:'var(--green)', fontSize:'1rem', minWidth:'1.2rem' }}>{i+1}</span>
+                            <span style={{ fontSize:'0.7rem', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                            <span style={{ fontSize:'0.68rem', fontWeight:700, color:'var(--green)', whiteSpace:'nowrap' }}>+₱{p.salesDiff.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <div style={{ fontSize:'0.68rem', fontWeight:700, color:'var(--red)', marginBottom:'0.4rem' }}>▼ 要注意5</div>
+                        {ranking.worsened.length === 0 && <div style={{ fontSize:'0.72rem', color:'var(--dim)' }}>悪化商品なし</div>}
+                        {ranking.worsened.map((p,i) => (
+                          <div key={i} style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.35rem 0.6rem', background:'rgba(220,38,38,0.08)', borderRadius:6, marginBottom:'0.3rem' }}>
+                            <span style={{ fontFamily:"'Bebas Neue',sans-serif", color:'var(--red)', fontSize:'1rem', minWidth:'1.2rem' }}>{i+1}</span>
+                            <span style={{ fontSize:'0.7rem', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                            <span style={{ fontSize:'0.68rem', fontWeight:700, color:'var(--red)', whiteSpace:'nowrap' }}>₱{p.salesDiff.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* グラフ */}
+                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📊 直近30件の推移</div>
                 <TrendCharts data={monthData} />
               </div>
             )}
@@ -625,7 +740,7 @@ function GoalPaceBar({ label, unit, color, actual, target, daysElapsed, daysInMo
   )
 }
 
-function GoalPaceBlock({ uid, latest, monthlyDiarySales, fxRateOverride, shopeeIncome, inventoryCost }) {
+function GoalPaceBlock({ uid, latest, monthlyDiarySales, weeklyDiarySales, todayDiarySales, fxRateOverride, shopeeIncome, inventoryCost, monthOrders, period = 'thismonth' }) {
   const [goals, setGoals] = useState(null)
   const [fxRate, setFxRate] = useState(1)
   useEffect(() => { if (uid) load() }, [uid])
@@ -644,39 +759,67 @@ function GoalPaceBlock({ uid, latest, monthlyDiarySales, fxRateOverride, shopeeI
   const now = new Date()
   const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate()
   const daysElapsed = now.getDate()
-  const thisMonth = goals?.thismonth || {}
-  const hasAnyGoal = Object.values(thisMonth).some(v => v && parseFloat(v) > 0)
+  const periodGoals = goals?.[period] || {}
+  const hasAnyGoal = Object.values(periodGoals).some(v => v && parseFloat(v) > 0)
   if (!goals || !hasAnyGoal || !latest) return null
-  // Diary月次累計を優先、なければXLSX×レート
+
   const effectiveFxRate = fxRateOverride || fxRate
-  const salesJpy = (monthlyDiarySales?.jpy && monthlyDiarySales.jpy > 0)
-    ? monthlyDiarySales.jpy
-    : (monthlyDiarySales?.php && monthlyDiarySales.php > 0)
-    ? Math.round(monthlyDiarySales.php * effectiveFxRate)
-    : Math.round((latest.kpis?.totalSales || 0) * effectiveFxRate)
-  // 粗利計算: 売上(₱→¥) - Shopee手数料(₱→¥) - 在庫仕入原価(₱→¥)
+
+  // 期間別の実績値・表示設定
+  let salesActual, ordersActual, cvrActual, elapsed, total, periodLabel, borderColor
+  if (period === 'thismonth') {
+    salesActual = (monthlyDiarySales?.jpy && monthlyDiarySales.jpy > 0) ? monthlyDiarySales.jpy
+      : Math.round((monthlyDiarySales?.php || 0) * effectiveFxRate)
+    ordersActual = monthlyDiarySales?.orders || 0
+    cvrActual = monthlyDiarySales?.cvr || 0
+    elapsed = daysElapsed; total = daysInMonth
+    periodLabel = '今月の目標ペース'; borderColor = 'var(--orange)'
+  } else if (period === 'thisweek') {
+    salesActual = (weeklyDiarySales?.jpy && weeklyDiarySales.jpy > 0) ? weeklyDiarySales.jpy
+      : Math.round((weeklyDiarySales?.php || 0) * effectiveFxRate)
+    ordersActual = weeklyDiarySales?.orders || 0
+    cvrActual = weeklyDiarySales?.cvr || 0
+    elapsed = Math.min(now.getDay() || 7, 7); total = 7
+    periodLabel = '今週の目標ペース'; borderColor = 'var(--blue, #3b82f6)'
+  } else if (period === 'today') {
+    salesActual = (todayDiarySales?.jpy && todayDiarySales.jpy > 0) ? todayDiarySales.jpy
+      : Math.round((todayDiarySales?.php || 0) * effectiveFxRate)
+    ordersActual = todayDiarySales?.orders || 0
+    cvrActual = todayDiarySales?.cvr || 0
+    elapsed = 1; total = 1
+    periodLabel = '前日の目標達成'; borderColor = 'var(--green)'
+  }
+
+  // 粗利計算（月次のみ）
   const feesJpy = Math.round((shopeeIncome?.fees || 0) * effectiveFxRate)
-  const costJpy = Math.round((inventoryCost || 0) * effectiveFxRate)
-  const grossJpy = salesJpy - feesJpy - costJpy
+  const costMap = inventoryCost || {}
+  const monthCostPhp = (monthOrders || [])
+    .filter(o => o.status !== 'Cancelled')
+    .reduce((s, o) => s + (Number(costMap[o.sku]) || 0) * (Number(o.qty) || 1), 0)
+  const costJpy = Math.round(monthCostPhp * effectiveFxRate)
+  const grossJpy = period === 'thismonth' ? Math.max(0, salesActual - feesJpy - costJpy) : 0
+
   const GOAL_KEYS = [
-    { key:'sales',  label:'月間売上',   unit:'¥', actual: salesJpy },
-    { key:'gross',  label:'月間粗利',   unit:'¥', actual: grossJpy > 0 ? grossJpy : 0, color:'#10b981' },
-    { key:'orders', label:'月間受注数', unit:'件', actual: latest.kpis?.totalOrders },
-    { key:'ctr',    label:'CTR',       unit:'%',  actual: latest.kpis?.avgCtr },
-    { key:'cvr',    label:'CVR',       unit:'%',  actual: latest.kpis?.avgCvr },
+    { key:'sales',  label:'売上',   unit:'¥', actual: salesActual },
+    { key:'gross',  label:'粗利',   unit:'¥', actual: grossJpy, color:'#10b981' },
+    { key:'orders', label:'受注数', unit:'件', actual: ordersActual },
+    { key:'ctr',    label:'CTR',   unit:'%',  actual: latest.kpis?.avgCtr },
+    { key:'cvr',    label:'CVR',   unit:'%',  actual: cvrActual },
   ]
-  const targets = GOAL_KEYS.filter(g => thisMonth[g.key] && parseFloat(thisMonth[g.key]) > 0)
+  const targets = GOAL_KEYS.filter(g => periodGoals[g.key] && parseFloat(periodGoals[g.key]) > 0)
   if (targets.length === 0) return null
+
   return (
-    <div className="card" style={{ padding:'1.25rem', marginBottom:'1rem', borderTop:'2px solid var(--orange)' }}>
-      <div style={{ fontSize:'0.65rem', fontWeight:700, color:'var(--orange)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>
-        🏆 今月の目標ペース　<span style={{ color:'var(--dim2)', fontWeight:400 }}>{daysElapsed}日経過 / {daysInMonth}日　</span>
+    <div className="card" style={{ padding:'1.25rem', marginBottom:'1rem', borderTop:'2px solid '+borderColor }}>
+      <div style={{ fontSize:'0.65rem', fontWeight:700, color: borderColor, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1rem' }}>
+        🏆 {periodLabel}　
+        {period !== 'today' && <span style={{ color:'var(--dim2)', fontWeight:400 }}>{elapsed}日経過 / {total}日　</span>}
         <span style={{ color:'var(--dim2)', fontWeight:400 }}>💱 ₱1=¥{effectiveFxRate}</span>
       </div>
       {targets.map(g => (
         <GoalPaceBar key={g.key} label={g.label} unit={g.unit} color={g.color}
-          actual={g.actual} target={thisMonth[g.key]}
-          daysElapsed={daysElapsed} daysInMonth={daysInMonth} fxRate={fxRate} />
+          actual={g.actual} target={periodGoals[g.key]}
+          daysElapsed={elapsed} daysInMonth={total} fxRate={fxRate} />
       ))}
       <div style={{ marginTop:'0.75rem', fontSize:'0.65rem', color:'var(--dim2)', textAlign:'right' }}>
         目標は <span style={{ color:'var(--orange)', cursor:'pointer', textDecoration:'underline' }}>🏆 目標管理</span> タブで変更できます
@@ -687,18 +830,20 @@ function GoalPaceBlock({ uid, latest, monthlyDiarySales, fxRateOverride, shopeeI
 
 function GoalsTab({ uid, latest }) {
   const GOAL_PERIODS = [
-    { id:'3years',  label:'🚀 3年後（2029年）',        desc:'長期ビジョン' },
-    { id:'dec2026', label:'🎄 2026年12月',             desc:'年末目標' },
-    { id:'aug2026', label:'☀️ 2026年8月（繁忙期直前）', desc:'繁忙期準備' },
-    { id:'thismonth', label:'📅 今月の目標',            desc:new Date().getFullYear()+'年'+(new Date().getMonth()+1)+'月' },
+    { id:'3years',   label:'🚀 3年後（2029年）',        desc:'長期ビジョン' },
+    { id:'dec2026',  label:'🎄 2026年12月',             desc:'年末目標' },
+    { id:'aug2026',  label:'☀️ 2026年8月（繁忙期直前）', desc:'繁忙期準備' },
+    { id:'thismonth',label:'📅 今月の目標',              desc:new Date().getFullYear()+'年'+(new Date().getMonth()+1)+'月' },
+    { id:'thisweek', label:'📆 今週の目標',              desc:'直近7日間' },
+    { id:'today',    label:'📅 1日の目標',               desc:'1日あたり' },
   ]
   const GOAL_KEYS = [
-    { key:'sales',   label:'月間売上',   unit:'¥', color:'var(--orange)', placeholder:'例: 800000' },
-    { key:'orders',  label:'月間受注数', unit:'件', color:'var(--purple)', placeholder:'例: 100' },
+    { key:'sales',   label:'売上目標',   unit:'¥', color:'var(--orange)', placeholder:'例: 800000' },
+    { key:'orders',  label:'受注数目標', unit:'件', color:'var(--purple)', placeholder:'例: 100' },
     { key:'ctr',     label:'CTR目標',   unit:'%',  color:'#2563eb',       placeholder:'例: 5.0' },
     { key:'cvr',     label:'CVR目標',   unit:'%',  color:'#16a34a',       placeholder:'例: 8.0' },
-    { key:'gross',   label:'粗利',      unit:'¥', color:'#10b981',       placeholder:'例: 300000' },
-    { key:'profit',  label:'営業利益',  unit:'¥', color:'#06b6d4',       placeholder:'例: 200000' },
+    { key:'gross',   label:'粗利目標',  unit:'¥', color:'#10b981',       placeholder:'例: 300000' },
+    { key:'profit',  label:'営業利益目標',unit:'¥', color:'#06b6d4',      placeholder:'例: 200000' },
   ]
   const [goals, setGoals] = useState({})
   const [editing, setEditing] = useState('thismonth')
