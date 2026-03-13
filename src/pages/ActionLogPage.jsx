@@ -23,6 +23,80 @@ function Section({ title, children }) {
   )
 }
 
+// ── グラフ設定 ──
+const GRAPH_ITEMS = [
+  { key: "売上PHP",    label: "売上 (PHP)",    color: "var(--orange)", unit: "₱" },
+  { key: "出品数",     label: "出品数",         color: "var(--green)",  unit: "点" },
+  { key: "注文数",     label: "注文数",         color: "#60a5fa",       unit: "件" },
+  { key: "OCR",       label: "OCR (%)",        color: "#f59e0b",       unit: "%" },
+  { key: "CVR",       label: "CVR (%)",        color: "#a78bfa",       unit: "%" },
+  { key: "フォロワー", label: "フォロワー",      color: "#f472b6",       unit: "人" },
+  { key: "粗利円",     label: "粗利 (円)",      color: "#34d399",       unit: "¥" },
+]
+
+function GraphTab({ chartData }) {
+  const [visibleGraphs, setVisibleGraphs] = useState(
+    Object.fromEntries(GRAPH_ITEMS.map(g => [g.key, ["売上PHP","出品数","注文数"].includes(g.key)]))
+  )
+
+  function toggleGraph(key) {
+    setVisibleGraphs(v => ({ ...v, [key]: !v[key] }))
+  }
+
+  const activeItems = GRAPH_ITEMS.filter(g => visibleGraphs[g.key])
+
+  if (chartData.length < 2) {
+    return <div className="card" style={{padding:"2rem",textAlign:"center",color:"var(--dim2)"}}>グラフには2日以上のデータが必要です</div>
+  }
+
+  return (
+    <div>
+      {/* 表示切替 */}
+      <div className="card" style={{padding:"1rem 1.25rem",marginBottom:"1rem"}}>
+        <div style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"0.75rem"}}>表示項目</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:"0.5rem"}}>
+          {GRAPH_ITEMS.map(g => (
+            <button key={g.key} onClick={() => toggleGraph(g.key)}
+              style={{
+                padding:"0.3rem 0.75rem",borderRadius:20,
+                border:`1px solid ${visibleGraphs[g.key] ? g.color : "var(--rim)"}`,
+                background: visibleGraphs[g.key] ? `${g.color}22` : "transparent",
+                color: visibleGraphs[g.key] ? g.color : "var(--dim2)",
+                fontSize:"0.72rem",fontWeight:700,cursor:"pointer",transition:"all 0.15s"
+              }}>
+              {g.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 個別グラフ */}
+      <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
+        {activeItems.length === 0 && (
+          <div className="card" style={{padding:"2rem",textAlign:"center",color:"var(--dim2)"}}>表示項目を選択してください</div>
+        )}
+        {activeItems.map(g => (
+          <div key={g.key} className="card" style={{padding:"1.25rem"}}>
+            <div style={{fontSize:"0.65rem",color:"var(--dim2)",fontWeight:700,marginBottom:"1rem"}}>{g.label}推移</div>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <XAxis dataKey="date" tick={{fill:"#6b7280",fontSize:10}} />
+                <YAxis tick={{fill:"#6b7280",fontSize:10}} />
+                <Tooltip
+                  contentStyle={{background:"var(--card)",border:"1px solid var(--rim2)",borderRadius:8}}
+                  formatter={(v) => [`${Number(v).toLocaleString()}${g.unit}`, g.label]}
+                />
+                <Line type="monotone" dataKey={g.key} stroke={g.color} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function ActionLogPage({ uid: propUid }) {
   const [tab, setTab] = useState("input")
   const [logs, setLogs] = useState([])
@@ -47,7 +121,6 @@ export default function ActionLogPage({ uid: propUid }) {
   })
 
   const [prevRate, setPrevRate] = useState(null)
-
   const [settings, setSettings] = useState({})
 
   useEffect(() => {
@@ -93,20 +166,16 @@ export default function ActionLogPage({ uid: propUid }) {
   async function fetchRate() {
     setRateLoading(true)
     try {
-      // USD経由で正確なレートを計算（₱→USD→¥、Payoneer手数料2%引き）
       const res = await fetch("https://open.er-api.com/v6/latest/USD")
       const json = await res.json()
       const usdJpy = json?.rates?.JPY
       const usdPhp = json?.rates?.PHP
       if (usdJpy && usdPhp) {
-        // ₱1 = (1/usdPhp) × usdJpy × 0.98（手数料2%引き）
         const rate = (1 / usdPhp) * usdJpy * 0.98
         const rateStr = rate.toFixed(4)
         setForm(f => ({ ...f, rate_php_jpy: rateStr }))
         await setDoc(doc(db, "fx_rates", propUid || auth.currentUser?.uid), {
-          rate_php_jpy: rateStr,
-          usd_jpy: usdJpy.toFixed(4),
-          usd_php: usdPhp.toFixed(4),
+          rate_php_jpy: rateStr, usd_jpy: usdJpy.toFixed(4), usd_php: usdPhp.toFixed(4),
           updatedAt: new Date().toISOString()
         })
       } else {
@@ -119,9 +188,7 @@ export default function ActionLogPage({ uid: propUid }) {
           const rateStr = rate2.toFixed(4)
           setForm(f => ({ ...f, rate_php_jpy: rateStr }))
           await setDoc(doc(db, "fx_rates", propUid || auth.currentUser?.uid), {
-            rate_php_jpy: rateStr,
-            usd_jpy: usdJpy2.toFixed(4),
-            usd_php: usdPhp2.toFixed(4),
+            rate_php_jpy: rateStr, usd_jpy: usdJpy2.toFixed(4), usd_php: usdPhp2.toFixed(4),
             updatedAt: new Date().toISOString()
           })
         } else alert("レート取得失敗。手動で入力してください。")
@@ -162,9 +229,35 @@ export default function ActionLogPage({ uid: propUid }) {
     setSaving(false)
   }
 
-  const chartData = [...logs].reverse().slice(-30).map(l => ({
-    date: l.date?.slice(5), 売上: Number(l.sales_php)||0, 出品数: Number(l.listings)||0
-  }))
+  // ── グラフデータ（全項目対応）──
+  const chartData = [...logs].reverse().slice(-30).map(l => {
+    const salesJpyVal = (Number(l.sales_php)||0) * (Number(l.rate_php_jpy)||0)
+    const cost = (Number(l.buy_daiso)||0)+(Number(l.buy_amazon)||0)+(Number(l.buy_mercari)||0)+(Number(l.buy_other)||0)+(Number(l.domestic_shipping)||0)+(Number(l.packaging_materials)||0)
+    const cvr = (Number(l.visitors)||0) > 0 ? ((Number(l.orders)||0) / (Number(l.visitors)||0) * 100) : 0
+    return {
+      date: l.date?.slice(5),
+      売上PHP:    Number(l.sales_php)||0,
+      出品数:     Number(l.listings)||0,
+      注文数:     Number(l.orders)||0,
+      OCR:        Number(l.ocr)||0,
+      CVR:        Math.round(cvr * 10) / 10,
+      フォロワー:  Number(l.followers)||0,
+      粗利円:     Math.round(salesJpyVal - cost),
+    }
+  })
+
+  const emptyForm = {
+    date: new Date(Date.now()-86400000).toISOString().split("T")[0],
+    rate_php_jpy:"", listings:"", improved_pages:"", live:"",
+    sales_php:"", sales_rebate_php:"", orders:"", cancelled:"", cancelled_sales:"",
+    returned:"", sales_deposit_usd:"", visitors:"", clicks:"", spo:"", ocr:"", cv:"",
+    followers:"", follow_prize:"", usage:"", rating_stars:"", rating:"",
+    voucher_new_buyer:"", voucher_repeat_buyer:"", voucher_follow_prize:"",
+    usage_new_buyer:"", usage_repeat_buyer:"",
+    pasabuy:"", pasabuy_cv:"", inquiry:"",
+    buy_daiso:"", buy_amazon:"", buy_mercari:"", buy_other:"",
+    domestic_shipping:"", packaging_materials:"", memo:""
+  }
 
   return (
     <div style={{maxWidth:960,margin:"0 auto",padding:"1.5rem"}}>
@@ -174,14 +267,17 @@ export default function ActionLogPage({ uid: propUid }) {
           <button key={id} onClick={() => setTab(id)} style={{padding:"0.5rem 1.2rem",borderRadius:10,border:"none",cursor:"pointer",fontSize:"0.8rem",fontWeight:700,background:tab===id?"var(--orange)":"transparent",color:tab===id?"#fff":"var(--dim2)",transition:"all 0.2s"}}>{label}</button>
         ))}
       </div>
+
       {tab === "input" && (
         <div>
+          {/* 日付 */}
           <div style={{marginBottom:"1rem"}}>
             <label style={{fontSize:"0.72rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase"}}>日付（前日分）</label>
             <input type="date" value={form.date} onChange={e => set("date", e.target.value)}
               style={{display:"block",marginTop:"0.3rem",padding:"0.6rem 0.8rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.9rem"}} />
           </div>
 
+          {/* 為替レート（常時表示） */}
           <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
             <div style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>為替レート</div>
             {prevRate && (
@@ -199,69 +295,90 @@ export default function ActionLogPage({ uid: propUid }) {
             </div>
           </div>
 
-          <Section title="出品・改修">
-            <Field label="Live（出品数）" icon="🟢" value={form.live} onChange={e => set("live", e.target.value)} note="現在のShopee出品数" />
-            <div>
-              <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>📦 出品点数（前日）</label>
-              <input type="number" value={form.listings} onChange={e => set("listings", e.target.value)} placeholder="0"
-                style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.9rem",boxSizing:"border-box"}} />
-              {listingsDiff !== null && (
-                <div style={{fontSize:"0.72rem",marginTop:"0.3rem",color:listingsDiff>=0?"var(--green)":"#ef4444",fontWeight:700}}>
-                  前日比: {listingsDiff >= 0 ? "+" : ""}{listingsDiff}点
+          {/* 出品・改修 */}
+          {(show("live") || show("listings") || show("improved_pages")) && (
+            <Section title="出品・改修">
+              {show("live") && <Field label="Live（出品数）" icon="🟢" value={form.live} onChange={e => set("live", e.target.value)} note="現在のShopee出品数" />}
+              {show("listings") && (
+                <div>
+                  <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>📦 出品点数（前日）</label>
+                  <input type="number" value={form.listings} onChange={e => set("listings", e.target.value)} placeholder="0"
+                    style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.9rem",boxSizing:"border-box"}} />
+                  {listingsDiff !== null && (
+                    <div style={{fontSize:"0.72rem",marginTop:"0.3rem",color:listingsDiff>=0?"var(--green)":"#ef4444",fontWeight:700}}>
+                      前日比: {listingsDiff >= 0 ? "+" : ""}{listingsDiff}点
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-            <Field label="改修商品ページ件数（前日）" icon="🔧" value={form.improved_pages} onChange={e => set("improved_pages", e.target.value)} />
-          </Section>
+              {show("improved_pages") && <Field label="改修商品ページ件数（前日）" icon="🔧" value={form.improved_pages} onChange={e => set("improved_pages", e.target.value)} />}
+            </Section>
+          )}
 
-          <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
-            <div style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>売上・注文</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
-              <Field label="Sales (PHP) ₱" icon="💰" value={form.sales_php} onChange={e => set("sales_php", e.target.value)} />
-              <Field label="Sales (円) 自動" icon="💴" value={salesJpy} onChange={() => {}} readOnly={true} />
-              <Field label="Sales Rebate applied (PHP) ₱" icon="🏷️" value={form.sales_rebate_php} onChange={e => set("sales_rebate_php", e.target.value)} note="Shopee Rebate適用後" />
-              <Field label="Sales Rebate (円) 自動" icon="💴" value={salesRebateJpy} onChange={() => {}} readOnly={true} />
-              <Field label="Orders（注文数）" icon="📦" value={form.orders} onChange={e => set("orders", e.target.value)} />
-              <Field label="売上入金 USD" icon="🏦" value={form.sales_deposit_usd} onChange={e => set("sales_deposit_usd", e.target.value)} note="Payoniaへの入金額" />
-            </div>
-          </div>
-
-          <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
-            <div style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>📊 アクセス・転換率 <span style={{fontSize:"0.6rem",color:"var(--dim2)",fontWeight:400,textTransform:"none"}}>Key Metrics</span></div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
-              <div>
-                <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>📊 Order Conversion Rate（OCR %）</label>
-                <input type="number" value={form.ocr} onChange={e => set("ocr", e.target.value)} placeholder="0"
-                  style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.9rem",boxSizing:"border-box"}} />
-                <div style={{fontSize:"0.65rem",color:"var(--dim)",marginTop:"0.2rem"}}>Order Conversion Rate</div>
+          {/* 売上・注文 */}
+          {(show("sales_php")||show("sales_jpy")||show("sales_rebate_php")||show("sales_rebate_jpy")||show("orders")||show("sales_deposit_usd")) && (
+            <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
+              <div style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>売上・注文</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
+                {show("sales_php") && <Field label="Sales (PHP) ₱" icon="💰" value={form.sales_php} onChange={e => set("sales_php", e.target.value)} />}
+                {show("sales_jpy") && <Field label="Sales (円) 自動" icon="💴" value={salesJpy} onChange={() => {}} readOnly={true} />}
+                {show("sales_rebate_php") && <Field label="Sales Rebate applied (PHP) ₱" icon="🏷️" value={form.sales_rebate_php} onChange={e => set("sales_rebate_php", e.target.value)} note="Shopee Rebate適用後" />}
+                {show("sales_rebate_jpy") && <Field label="Sales Rebate (円) 自動" icon="💴" value={salesRebateJpy} onChange={() => {}} readOnly={true} />}
+                {show("orders") && <Field label="Orders（注文数）" icon="📦" value={form.orders} onChange={e => set("orders", e.target.value)} />}
+                {show("sales_deposit_usd") && <Field label="売上入金 USD" icon="🏦" value={form.sales_deposit_usd} onChange={e => set("sales_deposit_usd", e.target.value)} note="Payoniaへの入金額" />}
               </div>
-              <Field label="Visitors（訪問者数）" icon="👥" value={form.visitors} onChange={e => set("visitors", e.target.value)} />
-              <Field label="Product Clicks（クリック数）" icon="🖱️" value={form.clicks} onChange={e => set("clicks", e.target.value)} />
-              <Field label="Sales per Order ₱（SPO）" icon="📍" value={form.spo} onChange={e => set("spo", e.target.value)} />
-              <Field label="CV（注文転換数）" icon="📈" value={form.cv} onChange={e => set("cv", e.target.value)} />
             </div>
-          </div>
+          )}
 
-          <div className="card" style={{padding:"1.25rem",marginBottom:"1rem",border:"1px solid rgba(239,68,68,0.2)"}}>
-            <div style={{fontSize:"0.7rem",fontWeight:700,color:"#ef4444",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>キャンセル・返金</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
-              <Field label="キャンセル数" icon="❌" value={form.cancelled} onChange={e => set("cancelled", e.target.value)} />
-              <Field label="キャンセル売上 (PHP)" icon="🚫" value={form.cancelled_sales} onChange={e => set("cancelled_sales", e.target.value)} />
-              <Field label="返品数" icon="↩️" value={form.returned} onChange={e => set("returned", e.target.value)} />
+          {/* アクセス・転換率 */}
+          {(show("ocr")||show("visitors")||show("clicks")||show("spo")||show("cv")) && (
+            <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
+              <div style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>📊 アクセス・転換率 <span style={{fontSize:"0.6rem",color:"var(--dim2)",fontWeight:400,textTransform:"none"}}>Key Metrics</span></div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
+                {show("ocr") && (
+                  <div>
+                    <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>📊 Order Conversion Rate（OCR %）</label>
+                    <input type="number" value={form.ocr} onChange={e => set("ocr", e.target.value)} placeholder="0"
+                      style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.9rem",boxSizing:"border-box"}} />
+                    <div style={{fontSize:"0.65rem",color:"var(--dim)",marginTop:"0.2rem"}}>Order Conversion Rate</div>
+                  </div>
+                )}
+                {show("visitors") && <Field label="Visitors（訪問者数）" icon="👥" value={form.visitors} onChange={e => set("visitors", e.target.value)} />}
+                {show("clicks") && <Field label="Product Clicks（クリック数）" icon="🖱️" value={form.clicks} onChange={e => set("clicks", e.target.value)} />}
+                {show("spo") && <Field label="Sales per Order ₱（SPO）" icon="📍" value={form.spo} onChange={e => set("spo", e.target.value)} />}
+                {show("cv") && <Field label="CV（注文転換数）" icon="📈" value={form.cv} onChange={e => set("cv", e.target.value)} />}
+              </div>
             </div>
-          </div>
+          )}
 
-          <Section title="フォロー・評価">
-            <div>
-              <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>🔗 ショップURL</label>
-              <input type="url" value={form.shop_url||""} onChange={e => set("shop_url", e.target.value)} placeholder="https://shopee.ph/your-shop"
-                style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.9rem",boxSizing:"border-box"}} />
-              {form.shop_url && <a href={form.shop_url} target="_blank" rel="noreferrer" style={{fontSize:"0.68rem",color:"var(--orange)",marginTop:"0.3rem",display:"block"}}>→ ショップを開く</a>}
+          {/* キャンセル・返金 */}
+          {(show("cancelled")||show("cancelled_sales")||show("returned")) && (
+            <div className="card" style={{padding:"1.25rem",marginBottom:"1rem",border:"1px solid rgba(239,68,68,0.2)"}}>
+              <div style={{fontSize:"0.7rem",fontWeight:700,color:"#ef4444",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>キャンセル・返金</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
+                {show("cancelled") && <Field label="キャンセル数" icon="❌" value={form.cancelled} onChange={e => set("cancelled", e.target.value)} />}
+                {show("cancelled_sales") && <Field label="キャンセル売上 (PHP)" icon="🚫" value={form.cancelled_sales} onChange={e => set("cancelled_sales", e.target.value)} />}
+                {show("returned") && <Field label="返品数" icon="↩️" value={form.returned} onChange={e => set("returned", e.target.value)} />}
+              </div>
             </div>
-            <Field label="Followers（フォロワー数）" icon="❤️" value={form.followers} onChange={e => set("followers", e.target.value)} note="Shopeeショップページの数値" />
-            <Field label="評価数" icon="⭐" value={form.rating_stars} onChange={e => set("rating_stars", e.target.value)} />
-            <Field label="評価スコア" icon="🌟" value={form.rating} onChange={e => set("rating", e.target.value)} />
-          </Section>
+          )}
+
+          {/* フォロー・評価 */}
+          {(show("followers")||show("rating_stars")||show("rating")) && (
+            <Section title="フォロー・評価">
+              <div>
+                <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>🔗 ショップURL</label>
+                <input type="url" value={form.shop_url||""} onChange={e => set("shop_url", e.target.value)} placeholder="https://shopee.ph/your-shop"
+                  style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.9rem",boxSizing:"border-box"}} />
+                {form.shop_url && <a href={form.shop_url} target="_blank" rel="noreferrer" style={{fontSize:"0.68rem",color:"var(--orange)",marginTop:"0.3rem",display:"block"}}>→ ショップを開く</a>}
+              </div>
+              {show("followers") && <Field label="Followers（フォロワー数）" icon="❤️" value={form.followers} onChange={e => set("followers", e.target.value)} note="Shopeeショップページの数値" />}
+              {show("rating_stars") && <Field label="評価数" icon="⭐" value={form.rating_stars} onChange={e => set("rating_stars", e.target.value)} />}
+              {show("rating") && <Field label="評価スコア" icon="🌟" value={form.rating} onChange={e => set("rating", e.target.value)} />}
+            </Section>
+          )}
+
+          {/* Voucher（常時表示） */}
           <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
             <div style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>🎁 Voucher</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
@@ -301,53 +418,61 @@ export default function ActionLogPage({ uid: propUid }) {
             </div>
           </div>
 
-
-
-          <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
-            <div style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>🛒 仕入れ</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
-              <Field label="DAISO仕入れ (円)" icon="🏪" value={form.buy_daiso} onChange={e => set("buy_daiso", e.target.value)} />
-              <Field label="Amazon仕入れ (円)" icon="📦" value={form.buy_amazon} onChange={e => set("buy_amazon", e.target.value)} />
-              <Field label="メルカリ仕入れ (円)" icon="♻️" value={form.buy_mercari} onChange={e => set("buy_mercari", e.target.value)} />
-              <Field label="その他仕入れ (円)" icon="🛒" value={form.buy_other} onChange={e => set("buy_other", e.target.value)} />
-              <div>
-                <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>💴 仕入れ合計（自動）</label>
-                <input type="text" readOnly value={
-                  (Number(form.buy_daiso||0)+Number(form.buy_amazon||0)+Number(form.buy_mercari||0)+Number(form.buy_other||0)) > 0
-                    ? "¥" + (Number(form.buy_daiso||0)+Number(form.buy_amazon||0)+Number(form.buy_mercari||0)+Number(form.buy_other||0)).toLocaleString()
-                    : "-"
-                } style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"rgba(255,255,255,0.03)",color:"var(--orange)",fontSize:"0.9rem",boxSizing:"border-box",fontWeight:700}} />
-                <div style={{fontSize:"0.65rem",color:"var(--dim)",marginTop:"0.2rem"}}>DAISO + Amazon + メルカリ + その他</div>
+          {/* 仕入れ */}
+          {(show("buy_daiso")||show("buy_amazon")||show("buy_mercari")||show("buy_other")) && (
+            <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
+              <div style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>🛒 仕入れ</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
+                {show("buy_daiso") && <Field label="DAISO仕入れ (円)" icon="🏪" value={form.buy_daiso} onChange={e => set("buy_daiso", e.target.value)} />}
+                {show("buy_amazon") && <Field label="Amazon仕入れ (円)" icon="📦" value={form.buy_amazon} onChange={e => set("buy_amazon", e.target.value)} />}
+                {show("buy_mercari") && <Field label="メルカリ仕入れ (円)" icon="♻️" value={form.buy_mercari} onChange={e => set("buy_mercari", e.target.value)} />}
+                {show("buy_other") && <Field label="その他仕入れ (円)" icon="🛒" value={form.buy_other} onChange={e => set("buy_other", e.target.value)} />}
+                <div>
+                  <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>💴 仕入れ合計（自動）</label>
+                  <input type="text" readOnly value={
+                    (Number(form.buy_daiso||0)+Number(form.buy_amazon||0)+Number(form.buy_mercari||0)+Number(form.buy_other||0)) > 0
+                      ? "¥" + (Number(form.buy_daiso||0)+Number(form.buy_amazon||0)+Number(form.buy_mercari||0)+Number(form.buy_other||0)).toLocaleString()
+                      : "-"
+                  } style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"rgba(255,255,255,0.03)",color:"var(--orange)",fontSize:"0.9rem",boxSizing:"border-box",fontWeight:700}} />
+                  <div style={{fontSize:"0.65rem",color:"var(--dim)",marginTop:"0.2rem"}}>DAISO + Amazon + メルカリ + その他</div>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="card" style={{padding:"1.25rem",marginBottom:"1rem",border:"1px solid rgba(99,102,241,0.2)"}}>
-            <div style={{fontSize:"0.7rem",fontWeight:700,color:"#818cf8",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>🚚 転送費用</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
-              <Field label="国内送料 (円)" icon="🚚" value={form.domestic_shipping} onChange={e => set("domestic_shipping", e.target.value)} />
-              <Field label="梱包資材 (円)" icon="📦" value={form.packaging_materials} onChange={e => set("packaging_materials", e.target.value)} />
-              <div>
-                <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>💴 転送費用合計 (自動)</label>
-                <input type="text" readOnly value={
-                  (Number(form.domestic_shipping||0) + Number(form.packaging_materials||0)) > 0
-                    ? "¥" + (Number(form.domestic_shipping||0) + Number(form.packaging_materials||0)).toLocaleString()
-                    : "-"
-                } style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"rgba(255,255,255,0.03)",color:"#818cf8",fontSize:"0.9rem",boxSizing:"border-box",fontWeight:700}} />
-                <div style={{fontSize:"0.65rem",color:"var(--dim)",marginTop:"0.2rem"}}>国内送料 + 梱包資材</div>
+          )}
+
+          {/* 転送費用 */}
+          {(show("domestic_shipping")||show("packaging_materials")) && (
+            <div className="card" style={{padding:"1.25rem",marginBottom:"1rem",border:"1px solid rgba(99,102,241,0.2)"}}>
+              <div style={{fontSize:"0.7rem",fontWeight:700,color:"#818cf8",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"1rem"}}>🚚 転送費用</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"0.75rem"}}>
+                {show("domestic_shipping") && <Field label="国内送料 (円)" icon="🚚" value={form.domestic_shipping} onChange={e => set("domestic_shipping", e.target.value)} />}
+                {show("packaging_materials") && <Field label="梱包資材 (円)" icon="📦" value={form.packaging_materials} onChange={e => set("packaging_materials", e.target.value)} />}
+                <div>
+                  <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>💴 転送費用合計 (自動)</label>
+                  <input type="text" readOnly value={
+                    (Number(form.domestic_shipping||0) + Number(form.packaging_materials||0)) > 0
+                      ? "¥" + (Number(form.domestic_shipping||0) + Number(form.packaging_materials||0)).toLocaleString()
+                      : "-"
+                  } style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"rgba(255,255,255,0.03)",color:"#818cf8",fontSize:"0.9rem",boxSizing:"border-box",fontWeight:700}} />
+                  <div style={{fontSize:"0.65rem",color:"var(--dim)",marginTop:"0.2rem"}}>国内送料 + 梱包資材</div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
-            <label style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase"}}>📝 メモ・気づき</label>
-            <textarea value={form.memo} onChange={e => set("memo", e.target.value)} placeholder="今日の気づきや課題など..."
-              style={{display:"block",width:"100%",marginTop:"0.5rem",padding:"0.6rem 0.8rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.85rem",minHeight:80,resize:"vertical",boxSizing:"border-box"}} />
-          </div>
+          {/* メモ */}
+          {show("memo") && (
+            <div className="card" style={{padding:"1.25rem",marginBottom:"1rem"}}>
+              <label style={{fontSize:"0.7rem",fontWeight:700,color:"var(--orange)",textTransform:"uppercase"}}>📝 メモ・気づき</label>
+              <textarea value={form.memo} onChange={e => set("memo", e.target.value)} placeholder="今日の気づきや課題など..."
+                style={{display:"block",width:"100%",marginTop:"0.5rem",padding:"0.6rem 0.8rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.85rem",minHeight:80,resize:"vertical",boxSizing:"border-box"}} />
+            </div>
+          )}
 
           {editId && (
             <div style={{textAlign:"center",marginBottom:"0.5rem",fontSize:"0.78rem",color:"var(--orange)",fontWeight:700}}>
               ✏️ 編集モード中
-              <button onClick={() => { setEditId(null); setForm({date: new Date(Date.now()-86400000).toISOString().split("T")[0], rate_php_jpy:"", listings:"", improved_pages:"", live:"", sales_php:"", sales_rebate_php:"", orders:"", cancelled:"", cancelled_sales:"", returned:"", sales_deposit_usd:"", visitors:"", clicks:"", spo:"", ocr:"", cv:"", followers:"", follow_prize:"", usage:"", rating_stars:"", rating:"", voucher_new_buyer:"", voucher_repeat_buyer:"", voucher_follow_prize:"", usage_new_buyer:"", usage_repeat_buyer:"", pasabuy:"", pasabuy_cv:"", inquiry:"", buy_daiso:"", buy_amazon:"", buy_mercari:"", buy_other:"", domestic_shipping:"", packaging_materials:"", memo:"" }) }}
+              <button onClick={() => { setEditId(null); setForm(emptyForm) }}
                 style={{marginLeft:"1rem",padding:"0.2rem 0.6rem",borderRadius:6,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",fontSize:"0.72rem",cursor:"pointer"}}>キャンセル</button>
             </div>
           )}
@@ -357,6 +482,7 @@ export default function ActionLogPage({ uid: propUid }) {
           </button>
         </div>
       )}
+
       {tab === "history" && (
         <HistoryTab logs={logs} onDelete={async (id) => {
           if (!confirm("削除しますか？")) return
@@ -371,39 +497,9 @@ export default function ActionLogPage({ uid: propUid }) {
           window.scrollTo(0, 0)
         }} />
       )}
-      {tab === "graph" && (
-        <div>
-          {chartData.length < 2
-            ? <div className="card" style={{padding:"2rem",textAlign:"center",color:"var(--dim2)"}}>グラフには2日以上のデータが必要です</div>
-            : <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
-                <div className="card" style={{padding:"1.25rem"}}>
-                  <div style={{fontSize:"0.65rem",color:"var(--dim2)",fontWeight:700,marginBottom:"1rem"}}>売上推移 (PHP)</div>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                      <XAxis dataKey="date" tick={{fill:"#6b7280",fontSize:10}} />
-                      <YAxis tick={{fill:"#6b7280",fontSize:10}} />
-                      <Tooltip contentStyle={{background:"var(--card)",border:"1px solid var(--rim2)",borderRadius:8}} />
-                      <Line type="monotone" dataKey="売上" stroke="var(--orange)" strokeWidth={2} dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="card" style={{padding:"1.25rem"}}>
-                  <div style={{fontSize:"0.65rem",color:"var(--dim2)",fontWeight:700,marginBottom:"1rem"}}>出品数推移</div>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                      <XAxis dataKey="date" tick={{fill:"#6b7280",fontSize:10}} />
-                      <YAxis tick={{fill:"#6b7280",fontSize:10}} />
-                      <Tooltip contentStyle={{background:"var(--card)",border:"1px solid var(--rim2)",borderRadius:8}} />
-                      <Line type="monotone" dataKey="出品数" stroke="var(--green)" strokeWidth={2} dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-          }
-        </div>
-      )}
+
+      {tab === "graph" && <GraphTab chartData={chartData} />}
+
       {tab === "inventory" && (
         <InventoryTab uid={propUid || auth.currentUser?.uid} />
       )}

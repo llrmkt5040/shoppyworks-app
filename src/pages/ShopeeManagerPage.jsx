@@ -133,6 +133,9 @@ function ShippingTab({ orders, onUpload, fileName }) {
       <div style={{ marginBottom:12 }}>
         <UploadArea label={`再アップロード（現在: ${fileName||"未アップロード"}）`} onUpload={onUpload} uploaded={true} fileName={fileName} />
       </div>
+      <div style={{ marginBottom:8, padding:"8px 12px", background:"#f0fdf4", borderRadius:8, border:"1px solid #bbf7d0", fontSize:12, color:"#15803d", fontWeight:600 }}>
+        ✅ ORDER IDが重複する場合は最新データで上書きされます（累計: {orders.length}件）
+      </div>
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
         <KpiCard icon="📦" label="総注文数" value={`${orders.length}件`} color="#3b82f6" />
         <KpiCard icon="⚡" label="出荷待ち" value={`${counts["To ship"]||0}件`} color="#eab308" />
@@ -188,7 +191,6 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
   const refund       = Math.abs(Number(s.refundAmount)||0)
   const marginRate   = totalPrice?(totalRelease/totalPrice*100).toFixed(1):"—"
   const feeRate      = totalPrice?((commFee+serviceFee+transFee)/totalPrice*100).toFixed(1):"—"
-  // 再アップロードエリア（データあり時も表示）
   const waterfall = [
     {label:"売上（正価）",value:totalPrice,positive:true},
     {label:"返金・返品",value:-refund,positive:false},
@@ -200,10 +202,9 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
   ].filter(w=>w.value!==0)
   return (
     <div>
-      {/* To Release / Released タブ */}
       <div style={{ display:"flex", gap:8, marginBottom:12 }}>
         {[{id:"toRelease",label:"📥 To Release（入金予定）"},{id:"released",label:"✅ Released（入金済み）"}].map(t=>(
-          <button key={t.id} onClick={()=>setIncomeTab(t.id)} style={{ padding:"0.4rem 1rem", borderRadius:8, border:"none", background:incomeTab===t.id?"var(--orange)":"var(--surface)", color:incomeTab===t.id?"#fff":"var(--dim2)", fontWeight:incomeTab===t.id?700:400, fontSize:"0.8rem", cursor:"pointer", border:"1px solid var(--rim)" }}>{t.label}</button>
+          <button key={t.id} onClick={()=>setIncomeTab(t.id)} style={{ padding:"0.4rem 1rem", borderRadius:8, background:incomeTab===t.id?"var(--orange)":"var(--surface)", color:incomeTab===t.id?"#fff":"var(--dim2)", fontWeight:incomeTab===t.id?700:400, fontSize:"0.8rem", cursor:"pointer", border:"1px solid var(--rim)" }}>{t.label}</button>
         ))}
       </div>
       {items.length===0 ? (
@@ -241,10 +242,8 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
       </div>
       </>)}
       {inventoryItems && inventoryItems.length > 0 && items.length > 0 && (() => {
-        // SKU→仕入単価マップ（在庫棚卸から）
         const costMap = {}
         inventoryItems.forEach(i => { if(i.sku && i.costPhp > 0) costMap[i.sku] = { costPhp: Number(i.costPhp), name: i.name } })
-        // OrderID→SKUマップ（オーダーレポートから）
         const orderIdToSku = {}
         const orderIdToProduct = {}
         const orderIdToQty = {}
@@ -255,7 +254,6 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
             orderIdToQty[o.orderId] = Number(o.qty) || 1
           }
         })
-        // MyIncomeからSKU別売上集計（OrderIDで照合）
         const skuSales = {}
         items.forEach(item => {
           const orderId = item.orderId || ""
@@ -411,7 +409,7 @@ function CashflowTab({ incomeData, cashflowItems, onAddExpense }) {
 
 export default function ShopeeManagerPage({ uid: propUid }) {
   const { user } = useAuth()
-  const effectiveUid = propUid || effectiveUid
+  const effectiveUid = propUid || user?.uid
   const [tab, setTab] = useState("shipping")
   const [orders, setOrders] = useState([])
   const [inventoryItems, setInventoryItems] = useState([])
@@ -428,10 +426,19 @@ export default function ShopeeManagerPage({ uid: propUid }) {
     if (!user) return
     const load = async () => {
       try {
-        const orderSnap = await getDocs(query(collection(db,"shopee_orders"),where("userId","==",effectiveUid)))
-        if (!orderSnap.empty) {
-          const latest = orderSnap.docs.sort((a,b)=>(b.data().uploadedAt?.seconds||0)-(a.data().uploadedAt?.seconds||0))[0].data()
-          setOrders(latest.orders||[]); setOrderFileName(latest.fileName||"")
+        const { getDoc, doc: docRef } = await import("firebase/firestore")
+        // ORDER IDベースの固定ドキュメントから読み込み
+        const orderDoc = await getDoc(docRef(db, "shopee_orders", effectiveUid + "_orders"))
+        if (orderDoc.exists()) {
+          setOrders(orderDoc.data().orders || [])
+          setOrderFileName(orderDoc.data().fileName || "")
+        } else {
+          // 旧形式（addDoc）のデータも読み込み対応
+          const orderSnap = await getDocs(query(collection(db,"shopee_orders"),where("userId","==",effectiveUid)))
+          if (!orderSnap.empty) {
+            const latest = orderSnap.docs.sort((a,b)=>(b.data().uploadedAt?.seconds||0)-(a.data().uploadedAt?.seconds||0))[0].data()
+            setOrders(latest.orders||[]); setOrderFileName(latest.fileName||"")
+          }
         }
         const incSnap = await getDocs(query(collection(db,"shopee_income"),where("userId","==",effectiveUid)))
         if (!incSnap.empty) {
@@ -439,11 +446,9 @@ export default function ShopeeManagerPage({ uid: propUid }) {
           setIncomeData({ items:latest.items||[], summary:latest.summary||{} }); setIncomeFileName(latest.fileName||"")
         }
         const cfSnap = await getDocs(query(collection(db,"cashflow_items"),where("userId","==",effectiveUid)))
-        // 在庫棚卸データ取得
         const invSnap = await getDocs(query(collection(db,"inventory_items"),where("uid","==",effectiveUid)))
         setInventoryItems(invSnap.docs.map(d=>({id:d.id,...d.data()})))
-        // 為替レート取得
-        const fxSnap = await getDoc(doc(db,"fx_rates",effectiveUid))
+        const fxSnap = await getDoc(docRef(db,"fx_rates",effectiveUid))
         if(fxSnap.exists()) setFxRate(Number(fxSnap.data().rate_php_jpy)||0)
         setCashflowItems(cfSnap.docs.map(d=>({id:d.id,...d.data()})))
       } catch(err) { console.error(err) }
@@ -452,10 +457,31 @@ export default function ShopeeManagerPage({ uid: propUid }) {
   }, [user])
 
   const handleOrderUpload = async (wb, fileName) => {
-    const parsed = parseOrderXlsx(wb); setOrders(parsed); setOrderFileName(fileName)
-    if (!user) return; setSaving(true)
-    try { await addDoc(collection(db,"shopee_orders"),{ userId:effectiveUid, fileName, orders:parsed.slice(0,500), uploadedAt:serverTimestamp() }) }
-    catch(err) { console.error(err) } finally { setSaving(false) }
+    const parsed = parseOrderXlsx(wb)
+    // ORDER IDで重複排除：既存データとマージし、新しい方で上書き
+    setOrders(prev => {
+      const map = {}
+      prev.forEach(o => { if (o.orderId) map[o.orderId] = o })
+      parsed.forEach(o => { if (o.orderId) map[o.orderId] = o })
+      return Object.values(map)
+    })
+    setOrderFileName(fileName)
+    if (!user) return
+    setSaving(true)
+    try {
+      const { setDoc, doc: docRef, getDoc } = await import("firebase/firestore")
+      const docId = effectiveUid + "_orders"
+      // Firestoreの既存データとマージ
+      const existing = await getDoc(docRef(db, "shopee_orders", docId))
+      const existingOrders = existing.exists() ? (existing.data().orders || []) : []
+      const map = {}
+      existingOrders.forEach(o => { if (o.orderId) map[o.orderId] = o })
+      parsed.forEach(o => { if (o.orderId) map[o.orderId] = o })
+      const merged = Object.values(map).slice(0, 1000)
+      await setDoc(docRef(db, "shopee_orders", docId), {
+        userId: effectiveUid, fileName, orders: merged, uploadedAt: serverTimestamp()
+      })
+    } catch(err) { console.error(err) } finally { setSaving(false) }
   }
 
   const handleReleasedUpload = async (wb, fileName) => {

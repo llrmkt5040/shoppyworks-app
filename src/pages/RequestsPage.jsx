@@ -129,29 +129,60 @@ function CaseForm({ uid, buyers, initialData, onSaved, onCancel }) {
   const [selectedBuyer, setSelectedBuyer] = useState(initialData?.buyerName||"")
   const [newBuyer, setNewBuyer] = useState({name:"",platform:"Shopee",contact:"",note:""})
   const [product, setProduct] = useState({name:initialData?.product||"",weightG:initialData?.weightG||"",qty:initialData?.qty||"1",url:initialData?.url||"",note:initialData?.note||""})
-  const [estimate, setEstimate] = useState({itemPrice:initialData?.itemPrice||"",customs:initialData?.customs||"",feeRate:initialData?.feeRate||"25",profitMode:"amount",profitTarget:""})
+  const [estimate, setEstimate] = useState({itemPrice:initialData?.itemPrice||"",customs:initialData?.customs||"",feeRate:initialData?.feeRate||"25",profitMode:"amount",profitTarget:"",calcMode:"reverse",simOfferPrice:"",voucherRate:"0"})
   const [calcResult, setCalcResult] = useState(initialData?.price?{itemPHP:"0",shipping:initialData.shipping||0,customs:0,fee:initialData.fee||"0",feeRate:25,totalCost:"0",offerPHP:initialData.price,profit:initialData.profit||"0",profitRate:"0"}:null)
   const [offerMsg, setOfferMsg] = useState({en:initialData?.offerEn||"",tl:initialData?.offerTl||""})
   const [generating, setGenerating] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [rate, setRate] = useState(3.0)
   const shipping = calcShippingPHP(parseFloat(product.weightG)||0)
-  const RATE = 3.0
+
+  useEffect(() => {
+    async function loadRate() {
+      try {
+        const { db } = await import("../lib/firebase")
+        const { doc, getDoc } = await import("firebase/firestore")
+        const snap = await getDoc(doc(db, "fx_rates", uid))
+        if (snap.exists() && snap.data().rate_php_jpy) {
+          setRate(Number(snap.data().rate_php_jpy))
+        }
+      } catch(e) { console.error(e) }
+    }
+    if (uid) loadRate()
+  }, [uid])
 
   function calcEstimate(){
-    const itemPHP=(parseFloat(estimate.itemPrice)||0)/RATE
+    const itemPHP=(parseFloat(estimate.itemPrice)||0)/rate
     const sc=shipping, cu=parseFloat(estimate.customs)||0, fr=parseFloat(estimate.feeRate)||25
+    const vr=(parseFloat(estimate.voucherRate)||0)/100
     let offerPHP,profit
     if(estimate.profitMode==="amount"){
       const pa=parseFloat(estimate.profitTarget)||0
       offerPHP=(itemPHP+sc+cu+pa)/(1-fr/100)
-      profit=offerPHP*(1-fr/100)-itemPHP-sc-cu
+      const actualReceipt=offerPHP*(1-vr)
+      profit=actualReceipt*(1-fr/100)-itemPHP-sc-cu
     } else {
       const pr=parseFloat(estimate.profitTarget)||0
       offerPHP=(itemPHP+sc+cu)/(1-fr/100-pr/100)
-      profit=offerPHP*pr/100
+      const actualReceipt=offerPHP*(1-vr)
+      profit=actualReceipt*(1-fr/100)-itemPHP-sc-cu
     }
     const fee=offerPHP*fr/100
-    setCalcResult({itemPHP:itemPHP.toFixed(0),shipping:sc,customs:cu,fee:fee.toFixed(0),feeRate:fr,totalCost:(itemPHP+sc+cu).toFixed(0),offerPHP:offerPHP.toFixed(0),profit:profit.toFixed(0),profitRate:offerPHP>0?((profit/offerPHP)*100).toFixed(1):"0"})
+    const voucherAmt=offerPHP*vr
+    const actualReceipt=offerPHP*(1-vr)
+    setCalcResult({itemPHP:itemPHP.toFixed(0),shipping:sc,customs:cu,fee:fee.toFixed(0),feeRate:fr,totalCost:(itemPHP+sc+cu).toFixed(0),offerPHP:offerPHP.toFixed(0),profit:profit.toFixed(0),profitRate:offerPHP>0?((profit/offerPHP)*100).toFixed(1):"0",voucherAmt:voucherAmt.toFixed(0),actualReceipt:actualReceipt.toFixed(0),voucherRate:vr*100})
+  }
+
+  function calcSim(){
+    const itemPHP=(parseFloat(estimate.itemPrice)||0)/rate
+    const sc=shipping, cu=parseFloat(estimate.customs)||0, fr=parseFloat(estimate.feeRate)||25
+    const offerPHP=parseFloat(estimate.simOfferPrice)||0
+    const vr=(parseFloat(estimate.voucherRate)||0)/100
+    const fee=offerPHP*fr/100
+    const voucherAmt=offerPHP*vr
+    const actualReceipt=offerPHP*(1-vr)
+    const profit=actualReceipt*(1-fr/100)-itemPHP-sc-cu
+    setCalcResult({itemPHP:itemPHP.toFixed(0),shipping:sc,customs:cu,fee:fee.toFixed(0),feeRate:fr,totalCost:(itemPHP+sc+cu).toFixed(0),offerPHP:offerPHP.toFixed(0),profit:profit.toFixed(0),profitRate:offerPHP>0?((profit/offerPHP)*100).toFixed(1):"0",voucherAmt:voucherAmt.toFixed(0),actualReceipt:actualReceipt.toFixed(0),voucherRate:vr*100})
   }
 
   async function generateOffer(){
@@ -239,6 +270,15 @@ function CaseForm({ uid, buyers, initialData, onSaved, onCancel }) {
 
       {step===3&&(
         <div>
+          {/* モード切替タブ */}
+          <div style={{ display:"flex",gap:"0.35rem",padding:"0.3rem",background:"var(--surface)",borderRadius:8,border:"1px solid var(--rim)",marginBottom:"1.25rem",width:"fit-content" }}>
+            {[["reverse","💰 利益目標から計算"],["simulate","📊 価格シミュレーション"]].map(([m,l])=>(
+              <button key={m} onClick={()=>{setEstimate(f=>({...f,calcMode:m}));setCalcResult(null)}}
+                style={{ padding:"0.4rem 0.9rem",borderRadius:6,border:"none",background:estimate.calcMode===m?"var(--orange)":"transparent",color:estimate.calcMode===m?"#fff":"var(--dim2)",fontSize:"0.75rem",fontWeight:700,cursor:"pointer",transition:"all 0.15s" }}>
+                {l}
+              </button>
+            ))}
+          </div>
           <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"1.25rem" }}>
             <div style={{ display:"grid",gap:"0.75rem" }}>
               <div><label style={lbl}>仕入れ価格 ¥</label><input type="number" style={inp} value={estimate.itemPrice} onChange={e=>setEstimate(f=>({...f,itemPrice:e.target.value}))} placeholder="0" /></div>
@@ -246,16 +286,40 @@ function CaseForm({ uid, buyers, initialData, onSaved, onCancel }) {
               <div><label style={lbl}>関税・手数料 PHP（任意）</label><input type="number" style={inp} value={estimate.customs} onChange={e=>setEstimate(f=>({...f,customs:e.target.value}))} placeholder="0" /></div>
               <div><label style={lbl}>Shopee手数料率 % （売上ベース）</label><input type="number" style={inp} value={estimate.feeRate} onChange={e=>setEstimate(f=>({...f,feeRate:e.target.value}))} placeholder="25" /></div>
               <div>
-                <label style={lbl}>利益目標</label>
-                <div style={{ display:"flex",gap:"0.5rem",marginBottom:"0.4rem" }}>{[["amount","金額(PHP)"],["rate","利益率(%)"]].map(([v,l])=>(<button key={v} onClick={()=>setEstimate(f=>({...f,profitMode:v}))} style={{ padding:"0.3rem 0.75rem",borderRadius:6,border:"1px solid var(--rim)",background:estimate.profitMode===v?"var(--orange)":"transparent",color:estimate.profitMode===v?"#fff":"var(--dim2)",fontSize:"0.75rem",cursor:"pointer" }}>{l}</button>))}</div>
-                <input type="number" style={inp} value={estimate.profitTarget} onChange={e=>setEstimate(f=>({...f,profitTarget:e.target.value}))} placeholder={estimate.profitMode==="amount"?"希望利益額 PHP":"利益率 %"} />
+                <label style={lbl}>🎫 バウチャー割引率 % （0=なし）</label>
+                <input type="number" style={inp} value={estimate.voucherRate} onChange={e=>setEstimate(f=>({...f,voucherRate:e.target.value}))} placeholder="0" min="0" max="100" />
+                {parseFloat(estimate.voucherRate)>0 && <div style={{ fontSize:"0.72rem",color:"#f59e0b",marginTop:"0.25rem" }}>⚠️ バウチャー分は実質受取額から差し引かれます</div>}
               </div>
-              <button onClick={calcEstimate} style={{ padding:"0.65rem",borderRadius:8,border:"none",background:"var(--orange)",color:"#fff",fontWeight:700,cursor:"pointer" }}>計算する</button>
+              {estimate.calcMode==="reverse" ? (
+                <div>
+                  <label style={lbl}>利益目標</label>
+                  <div style={{ display:"flex",gap:"0.5rem",marginBottom:"0.4rem" }}>{[["amount","金額(PHP)"],["rate","利益率(%)"]].map(([v,l])=>(<button key={v} onClick={()=>setEstimate(f=>({...f,profitMode:v}))} style={{ padding:"0.3rem 0.75rem",borderRadius:6,border:"1px solid var(--rim)",background:estimate.profitMode===v?"var(--orange)":"transparent",color:estimate.profitMode===v?"#fff":"var(--dim2)",fontSize:"0.75rem",cursor:"pointer" }}>{l}</button>))}</div>
+                  <input type="number" style={inp} value={estimate.profitTarget} onChange={e=>setEstimate(f=>({...f,profitTarget:e.target.value}))} placeholder={estimate.profitMode==="amount"?"希望利益額 PHP":"利益率 %"} />
+                </div>
+              ) : (
+                <div>
+                  <label style={lbl}>オファー価格 PHP（直接入力）</label>
+                  <input type="number" style={inp} value={estimate.simOfferPrice} onChange={e=>setEstimate(f=>({...f,simOfferPrice:e.target.value}))} placeholder="例: 2500" />
+                  {estimate.simOfferPrice && <div style={{ fontSize:"0.72rem",color:"var(--dim2)",marginTop:"0.25rem" }}>≒ ¥{Math.round(parseFloat(estimate.simOfferPrice||0)*rate).toLocaleString()}</div>}
+                </div>
+              )}
+              <button onClick={estimate.calcMode==="reverse"?calcEstimate:calcSim} style={{ padding:"0.65rem",borderRadius:8,border:"none",background:"var(--orange)",color:"#fff",fontWeight:700,cursor:"pointer" }}>計算する</button>
             </div>
             {calcResult&&(
               <div style={{ display:"grid",gap:"0.5rem",alignContent:"start" }}>
                 <div style={{ fontSize:"0.75rem",fontWeight:700,color:"var(--dim2)",marginBottom:"0.25rem" }}>📊 見積もり結果</div>
-                {[["仕入れ(PHP換算)","₱"+Number(calcResult.itemPHP).toLocaleString(),null],["国際送料","₱"+Number(calcResult.shipping).toLocaleString(),null],["Shopee手数料("+calcResult.feeRate+"%)","₱"+Number(calcResult.fee).toLocaleString(),"#f59e0b"],["推奨オファー価格","₱"+Number(calcResult.offerPHP).toLocaleString(),"var(--orange)"],["利益額","₱"+Number(calcResult.profit).toLocaleString(),"#10b981"],["利益率",calcResult.profitRate+"%","#10b981"]].map(([k,v,c])=>(<div key={k} style={{ display:"flex",justifyContent:"space-between",padding:"0.45rem 0.7rem",background:"rgba(255,255,255,0.03)",borderRadius:6 }}><span style={{ fontSize:"0.74rem",color:"var(--dim2)" }}>{k}</span><span style={{ fontWeight:700,color:c||"var(--text)" }}>{v}</span></div>))}
+                {[
+                  ["仕入れ(PHP換算)","₱"+Number(calcResult.itemPHP).toLocaleString()+" (¥"+Math.round(Number(calcResult.itemPHP)*rate).toLocaleString()+")",null],
+                  ["国際送料","₱"+Number(calcResult.shipping).toLocaleString()+" (¥"+Math.round(Number(calcResult.shipping)*rate).toLocaleString()+")",null],
+                  ["Shopee手数料("+calcResult.feeRate+"%)","₱"+Number(calcResult.fee).toLocaleString()+" (¥"+Math.round(Number(calcResult.fee)*rate).toLocaleString()+")","#f59e0b"],
+                  ["推奨オファー価格","₱"+Number(calcResult.offerPHP).toLocaleString()+" (¥"+Math.round(Number(calcResult.offerPHP)*rate).toLocaleString()+")","var(--orange)"],
+                  ...(calcResult.voucherRate>0?[
+                    ["🎫 バウチャー割引("+calcResult.voucherRate+"%)","－₱"+Number(calcResult.voucherAmt).toLocaleString()+" (¥"+Math.round(Number(calcResult.voucherAmt)*rate).toLocaleString()+")","#f59e0b"],
+                    ["実質受取額","₱"+Number(calcResult.actualReceipt).toLocaleString()+" (¥"+Math.round(Number(calcResult.actualReceipt)*rate).toLocaleString()+")","var(--purple,#a78bfa)"],
+                  ]:[]),
+                  ["利益額","₱"+Number(calcResult.profit).toLocaleString()+" (¥"+Math.round(Number(calcResult.profit)*rate).toLocaleString()+")", Number(calcResult.profit)>=0?"#10b981":"var(--red)"],
+                  ["利益率",calcResult.profitRate+"%",Number(calcResult.profitRate)>=0?"#10b981":"var(--red)"],
+                ].map(([k,v,c])=>(<div key={k} style={{ display:"flex",justifyContent:"space-between",padding:"0.45rem 0.7rem",background:"rgba(255,255,255,0.03)",borderRadius:6 }}><span style={{ fontSize:"0.74rem",color:"var(--dim2)" }}>{k}</span><span style={{ fontWeight:700,color:c||"var(--text)",fontSize:"0.82rem" }}>{v}</span></div>))}
               </div>
             )}
           </div>
@@ -269,7 +333,7 @@ function CaseForm({ uid, buyers, initialData, onSaved, onCancel }) {
 
       {step===4&&(
         <div>
-          {calcResult&&(<div style={{ padding:"0.75rem 1rem",background:"rgba(255,107,43,0.08)",borderRadius:8,marginBottom:"1rem",display:"flex",gap:"1.5rem",flexWrap:"wrap" }}><span style={{ fontSize:"0.82rem" }}>オファー: <strong style={{ color:"var(--orange)" }}>₱{Number(calcResult.offerPHP).toLocaleString()}</strong></span><span style={{ fontSize:"0.82rem" }}>利益: <strong style={{ color:"#10b981" }}>₱{Number(calcResult.profit).toLocaleString()} ({calcResult.profitRate}%)</strong></span><span style={{ fontSize:"0.82rem" }}>手数料: <strong style={{ color:"#f59e0b" }}>₱{Number(calcResult.fee).toLocaleString()} ({calcResult.feeRate}%)</strong></span></div>)}
+          {calcResult&&(<div style={{ padding:"0.75rem 1rem",background:"rgba(255,107,43,0.08)",borderRadius:8,marginBottom:"1rem",display:"flex",gap:"1.5rem",flexWrap:"wrap" }}><span style={{ fontSize:"0.82rem" }}>オファー: <strong style={{ color:"var(--orange)" }}>₱{Number(calcResult.offerPHP).toLocaleString()} (¥{Math.round(Number(calcResult.offerPHP)*rate).toLocaleString()})</strong></span><span style={{ fontSize:"0.82rem" }}>利益: <strong style={{ color:"#10b981" }}>₱{Number(calcResult.profit).toLocaleString()} (¥{Math.round(Number(calcResult.profit)*rate).toLocaleString()}) ({calcResult.profitRate}%)</strong></span><span style={{ fontSize:"0.82rem" }}>手数料: <strong style={{ color:"#f59e0b" }}>₱{Number(calcResult.fee).toLocaleString()} ({calcResult.feeRate}%)</strong></span></div>)}
           <button onClick={generateOffer} disabled={generating} style={{ width:"100%",padding:"0.65rem",borderRadius:8,border:"1px solid rgba(129,140,248,0.4)",background:"rgba(129,140,248,0.1)",color:"#818cf8",fontWeight:700,cursor:generating?"not-allowed":"pointer",marginBottom:"1rem" }}>{generating?"生成中...":"AIオファー文章を生成（英語/タガログ語）"}</button>
           {(offerMsg.en||offerMsg.tl)&&(<div style={{ display:"grid",gap:"0.75rem",marginBottom:"1rem" }}>{[["🇺🇸 English",offerMsg.en],["🇵🇭 Tagalog",offerMsg.tl]].map(([title,msg])=>msg&&(<div key={title}><div style={{ fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",marginBottom:"0.25rem" }}>{title}</div><div style={{ fontSize:"0.82rem",lineHeight:1.7,padding:"0.6rem 0.75rem",background:"rgba(255,255,255,0.03)",borderRadius:6,marginBottom:"0.3rem" }}>{msg}</div><button onClick={()=>navigator.clipboard.writeText(msg)} style={{ fontSize:"0.68rem",padding:"0.2rem 0.6rem",borderRadius:4,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",cursor:"pointer" }}>コピー</button></div>))}</div>)}
           <div style={{ display:"flex",gap:"0.5rem" }}>

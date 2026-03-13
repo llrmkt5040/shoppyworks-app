@@ -13,7 +13,7 @@ import ShopeeManagerPage from "../pages/ShopeeManagerPage"
 import MassUpdatePage from "../pages/MassUpdatePage"
 import AccountHealthPage from "../pages/AccountHealthPage"
 import TaskChecklist, { useUncompletedCount } from "./TaskChecklist"
-import SettingsPage from "../pages/SettingsPage"
+import SettingsPage, { STAFF_PAGES, DEFAULT_STAFF_PERMS } from "../pages/SettingsPage"
 
 const NAV = [
   { id: "dashboard",     icon: "📈", label: "Dashboard",            sub: "数値管理",   section: null },
@@ -32,6 +32,20 @@ const NAV = [
   { id: "settings",      icon: "⚙️", label: "設定",                    sub: ""           },
 ]
 
+// スタッフが操作するページで、閲覧モード時に上部に表示するバナー
+function ViewOnlyBanner() {
+  return (
+    <div style={{
+      background:"rgba(96,165,250,0.12)", border:"1px solid rgba(96,165,250,0.3)",
+      borderRadius:8, padding:"0.5rem 1rem", marginBottom:"1rem",
+      fontSize:"0.72rem", color:"#60a5fa", fontWeight:700,
+      display:"flex", alignItems:"center", gap:"0.5rem"
+    }}>
+      👁️ 閲覧モード — このページは閲覧のみ可能です
+    </div>
+  )
+}
+
 export default function AppLayout() {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -40,7 +54,8 @@ export default function AppLayout() {
   const [userMenu, setUserMenu] = useState(false)
   const [bellOpen, setBellOpen] = useState(false)
   const uncompletedCount = useUncompletedCount(user?.uid)
-  const [staffTarget, setStaffTarget] = useState(null) // スタッフがアクセス中のユーザー情報
+  const [staffTarget, setStaffTarget] = useState(null)
+  const [staffPermissions, setStaffPermissions] = useState({}) // スタッフ自身のページ権限
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
@@ -55,11 +70,12 @@ export default function AppLayout() {
         }
       } else {
         setStaffTarget(null)
+        setStaffPermissions({})
       }
     })
   }, [])
 
-  // スタッフチェック: userがセットされたら実行
+  // スタッフチェック
   useEffect(() => {
     if (!user) return
     async function checkStaff() {
@@ -81,40 +97,79 @@ export default function AppLayout() {
                 email: targetData.email || ""
               }
               setStaffTarget(target)
+              // 権限を取得
+              const perms = data.staff_permissions?.[user.email?.toLowerCase()] || DEFAULT_STAFF_PERMS
+              setStaffPermissions(perms)
               return
             }
           }
         }
         setStaffTarget(null)
+        setStaffPermissions({})
       } catch(e) { console.error("staff check error:", e) }
     }
     checkStaff()
   }, [user])
 
+  // スタッフのページ権限を取得 ("edit" | "view" | "none")
+  function getStaffPerm(pageId) {
+    if (!staffTarget) return "edit" // オーナーは常にedit
+    if (pageId === "settings") return "none" // 設定は常に非表示
+    return staffPermissions[pageId] || "view"
+  }
+
+  // スタッフ向けナビ（noneのページは非表示）
+  function isNavVisible(pageId) {
+    if (!staffTarget) return true
+    return getStaffPerm(pageId) !== "none"
+  }
+
   function renderPage() {
     const uid = staffTarget ? staffTarget.uid : (profile?.uid || user?.uid)
-    // スタッフは設定ページにアクセス不可
-    if (!!staffTarget && page === "settings") return (
+    const perm = getStaffPerm(page)
+
+    // 設定ページはスタッフ非表示
+    if (staffTarget && page === "settings") return (
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:"1rem"}}>
         <div style={{fontSize:"2rem"}}>🔒</div>
         <div style={{fontSize:"1rem",fontWeight:700,color:"var(--text)"}}>設定ページはアクセスできません</div>
         <div style={{fontSize:"0.8rem",color:"var(--dim2)"}}>スタッフはオーナーの設定を変更できません</div>
       </div>
     )
-    switch (page) {
-      case "dashboard": return <DashboardPage uid={uid} />
-      case "notice":    return <NoticePage />
-      case "manual":    return <ManualPage />
-      case "analyzer":  return <AnalyzerPage uid={uid} onNavigate={setPage} />
-      case "actionlog": return <ActionLogPage uid={uid} />
-      case "inventory": return <InventoryPage uid={uid} />
-      case "requests":  return <RequestsPage uid={uid} />
-      case "shopee":    return <ShopeeManagerPage uid={uid} />
-      case "massupdate": return <MassUpdatePage uid={uid} />
-      case "accounthealth": return <AccountHealthPage uid={uid} />
-      case "settings":  return <SettingsPage uid={uid} profile={profile} />
-      default:          return <DashboardPage uid={uid} />
+
+    // noneのページに直接URLでアクセスした場合
+    if (staffTarget && perm === "none") return (
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:"1rem"}}>
+        <div style={{fontSize:"2rem"}}>🚫</div>
+        <div style={{fontSize:"1rem",fontWeight:700,color:"var(--text)"}}>このページへのアクセス権限がありません</div>
+      </div>
+    )
+
+    const viewOnly = staffTarget && perm === "view"
+
+    const pageContent = () => {
+      switch (page) {
+        case "dashboard":     return <DashboardPage uid={uid} viewOnly={viewOnly} />
+        case "notice":        return <NoticePage />
+        case "manual":        return <ManualPage />
+        case "analyzer":      return <AnalyzerPage uid={uid} onNavigate={setPage} viewOnly={viewOnly} />
+        case "actionlog":     return <ActionLogPage uid={uid} viewOnly={viewOnly} />
+        case "inventory":     return <InventoryPage uid={uid} viewOnly={viewOnly} />
+        case "requests":      return <RequestsPage uid={uid} viewOnly={viewOnly} />
+        case "shopee":        return <ShopeeManagerPage uid={uid} viewOnly={viewOnly} />
+        case "massupdate":    return <MassUpdatePage uid={uid} viewOnly={viewOnly} />
+        case "accounthealth": return <AccountHealthPage uid={uid} viewOnly={viewOnly} />
+        case "settings":      return <SettingsPage uid={uid} profile={profile} />
+        default:              return <DashboardPage uid={uid} viewOnly={viewOnly} />
+      }
     }
+
+    return (
+      <div style={{padding: viewOnly ? "1rem 1.5rem 0" : 0}}>
+        {viewOnly && <ViewOnlyBanner />}
+        {pageContent()}
+      </div>
+    )
   }
 
   const current = NAV.find(n => n.id === page)
@@ -138,11 +193,24 @@ export default function AppLayout() {
                 <div key={n.id} style={{ borderTop: '1px solid var(--rim)', margin: '0.4rem 0.5rem' }} />
               )
             }
+            // スタッフのnoneページは非表示
+            if (!isNavVisible(n.id)) return null
+
             const active = page === n.id
+            const perm = getStaffPerm(n.id)
             return (
               <button key={n.id} onClick={() => setPage(n.id)} style={{ display: "flex", alignItems: "center", gap: "0.65rem", padding: sideOpen ? "0.6rem 0.75rem" : "0.6rem", borderRadius: 8, border: "none", background: active ? "rgba(251,146,60,0.15)" : "transparent", outline: active ? "1px solid rgba(251,146,60,0.3)" : "none", color: active ? "var(--orange)" : "var(--dim2)", cursor: "pointer", textAlign: "left", width: "100%", justifyContent: sideOpen ? "flex-start" : "center", transition: "background 0.15s" }}>
                 <span style={{ fontSize: "1.05rem", flexShrink: 0 }}>{n.icon}</span>
-                {sideOpen && (<div style={{ overflow: "hidden" }}><div style={{ fontSize: "0.72rem", fontWeight: active ? 800 : 600, color: active ? "var(--orange)" : "var(--text)", lineHeight: 1.2, whiteSpace: "nowrap" }}>{n.label}</div>{n.sub && <div style={{ fontSize: "0.6rem", color: "var(--dim2)", lineHeight: 1 }}>{n.sub}</div>}</div>)}
+                {sideOpen && (
+                  <div style={{ overflow: "hidden", flex: 1 }}>
+                    <div style={{ fontSize: "0.72rem", fontWeight: active ? 800 : 600, color: active ? "var(--orange)" : "var(--text)", lineHeight: 1.2, whiteSpace: "nowrap" }}>{n.label}</div>
+                    {n.sub && <div style={{ fontSize: "0.6rem", color: "var(--dim2)", lineHeight: 1 }}>{n.sub}</div>}
+                  </div>
+                )}
+                {/* 閲覧バッジ */}
+                {sideOpen && staffTarget && perm === "view" && (
+                  <span style={{ fontSize: "0.55rem", color: "#60a5fa", fontWeight: 700, padding: "0.1rem 0.3rem", borderRadius: 3, background: "rgba(96,165,250,0.12)", flexShrink: 0 }}>閲覧</span>
+                )}
               </button>
             )
           })}
@@ -167,9 +235,11 @@ export default function AppLayout() {
                   <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text)" }}>{profile?.name || user.displayName || "ユーザー"}</div>
                   <div style={{ fontSize: "0.6rem", color: "var(--dim2)", marginTop: "0.1rem", wordBreak: "break-all" }}>{user.email}</div>
                 </div>
-                <button onClick={() => { setUserMenu(false); setPage("settings") }} style={{ width: "100%", padding: "0.6rem 1rem", background: "transparent", border: "none", color: "var(--text)", fontSize: "0.75rem", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: "0.5rem" }} onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.05)"} onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                  ⚙️ 設定
-                </button>
+                {!staffTarget && (
+                  <button onClick={() => { setUserMenu(false); setPage("settings") }} style={{ width: "100%", padding: "0.6rem 1rem", background: "transparent", border: "none", color: "var(--text)", fontSize: "0.75rem", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: "0.5rem" }} onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.05)"} onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                    ⚙️ 設定
+                  </button>
+                )}
                 <button onClick={() => { setUserMenu(false); signOut(auth) }} style={{ width: "100%", padding: "0.6rem 1rem", background: "transparent", border: "none", color: "#ef4444", fontSize: "0.75rem", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: "0.5rem" }} onMouseEnter={e => e.currentTarget.style.background="rgba(239,68,68,0.08)"} onMouseLeave={e => e.currentTarget.style.background="transparent"}>
                   🚪 ログアウト
                 </button>

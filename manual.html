@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShoppyWorks Bootcamp 操作マニュアル</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --card:     #1c2330;
+    --rim:      #30363d;
+    --rim2:     #21262d;
+    --orange:   #f97316;
+    --orange2:  #fb923c;
+    --green:    #16a34a;
+    --green2:   #22c55e;
+    --blue:     #2563eb;
+    --blue2:    #3b82f6;
+    --purple:   #a855f7;
+    --red:      #dc2626;
+    --yellow:   #eab308;
+    --text:     #e6edf3;
+    --dim:      #7d8590;
+    --dim2:     #586069;
+    --ai:       #00d4aa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  /* ===== レイアウト ===== */
+  .layout {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ===== サイドバー ===== */
+  .sidebar {
+    width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--rim);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    flex-shrink: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--rim) transparent;
+  }
+
+  .sidebar-logo {
+    padding: 1.25rem 1rem 1rem;
+    border-bottom: 1px solid var(--rim);
+  }
+  .sidebar-logo .app-name {
+    font-size: 0.9rem;
+    font-weight: 900;
+    color: var(--orange);
+    letter-spacing: 0.04em;
+  }
+  .sidebar-logo .subtitle {
+    font-size: 0.68rem;
+    color: var(--dim);
+    margin-top: 0.15rem;
+  }
+
+  .sidebar-nav { padding: 0.75rem 0; }
+
+  .nav-section-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--dim2);
+    padding: 0.6rem 1rem 0.3rem;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    color: var(--dim);
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+  .nav-item:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.04);
+  }
+  .nav-item.active {
+    color: var(--orange);
+    border-left-color: var(--orange);
+    background: rgba(249,115,22,0.08);
+  }
+  .nav-item .icon { font-size: 1rem; width: 1.1rem; flex-shrink: 0; }
+
+  /* ===== メインコンテンツ ===== */
+  .main {
+    flex: 1;
+    overflow-y: auto;
+    min-width: 0;
+  }
+
+  /* ===== ページヘッダー ===== */
+  .page-header {
+    background: linear-gradient(135deg, #161b22 0%, #1c2330 100%);
+    border-bottom: 1px solid var(--rim);
+    padding: 2rem 2.5rem 1.75rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .page-header::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, var(--orange) 0%, var(--orange2) 100%);
+  }
+  .page-header .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--orange);
+    background: rgba(249,115,22,0.1);
+    border: 1px solid rgba(249,115,22,0.25);
+    padding: 0.25rem 0.65rem;
+    border-radius: 100px;
+    margin-bottom: 0.75rem;
+  }
+  .page-header h1 {
+    font-size: 1.75rem;
+    font-weight: 900;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+  .page-header .desc {
+    font-size: 0.85rem;
+    color: var(--dim);
+    margin-top: 0.4rem;
+  }
+
+  /* ===== コンテンツ本体 ===== */
+  .content {
+    max-width: 860px;
+    padding: 2.5rem;
+  }
+
+  /* ===== セクション ===== */
+  .section { margin-bottom: 3.5rem; }
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: var(--text);
+    margin-bottom: 0.35rem;
+  }
+  .section-title .step-num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 28px;
+    background: var(--orange);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 900;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .section-lead {
+    font-size: 0.85rem;
+    color: var(--dim);
+    margin-bottom: 1.25rem;
+    padding-left: 0;
+  }
+
+  /* ===== カード ===== */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--rim);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .card-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--orange);
+    margin-bottom: 0.75rem;
+  }
+
+  /* ===== ステップリスト ===== */
+  .steps { list-style: none; display: flex; flex-direction: column; gap: 0.7rem; }
+  .steps li {
+    display: flex;
+    gap: 0.85rem;
+    align-items: flex-start;
+    background: var(--card);
+    border: 1px solid var(--rim);
+    border-radius: 8px;
+    padding: 0.85rem 1.1rem;
+  }
+  .steps li .snum {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px; height: 24px;
+    background: rgba(249,115,22,0.15);
+    border: 1.5px solid var(--orange);
+    color: var(--orange);
+    font-size: 0.72rem;
+    font-weight: 900;
+    border-radius: 50%;
+    margin-top: 0.05rem;
+    flex-shrink: 0;
+  }
+  .steps li .sbody { flex: 1; }
+  .steps li .stitle {
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--text);
+    margin-bottom: 0.2rem;
+  }
+  .steps li .sdesc {
+    font-size: 0.8rem;
+    color: var(--dim);
+    line-height: 1.6;
+  }
+  .steps li .sdesc code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    background: rgba(255,255,255,0.07);
+    color: var(--ai);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+  }
+
+  /* ===== TIP・注意 ===== */
+  .tip {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    padding: 0.85rem 1.1rem;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    margin-bottom: 0.75rem;
+  }
+  .tip.info    { background: rgba(37,99,235,0.1); border: 1px solid rgba(37,99,235,0.3); }
+  .tip.warn    { background: rgba(234,179,8,0.1); border: 1px solid rgba(234,179,8,0.3); }
+  .tip.success { background: rgba(22,163,74,0.1); border: 1px solid rgba(22,163,74,0.3); }
+  .tip.danger  { background: rgba(220,38,38,0.1); border: 1px solid rgba(220,38,38,0.3); }
+  .tip .tip-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 0.05rem; }
+  .tip .tip-text { flex: 1; line-height: 1.6; color: var(--dim); }
+  .tip .tip-text strong { color: var(--text); font-weight: 700; }
+
+  /* ===== KPI説明グリッド ===== */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .kpi-item {
+    background: var(--card);
+    border: 1px solid var(--rim);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    border-top: 2px solid var(--orange);
+  }
+  .kpi-item.blue   { border-top-color: var(--blue2); }
+  .kpi-item.green  { border-top-color: var(--green2); }
+  .kpi-item.purple { border-top-color: var(--purple); }
+  .kpi-item.red    { border-top-color: var(--red); }
+  .kpi-item.yellow { border-top-color: var(--yellow); }
+  .kpi-item.ai     { border-top-color: var(--ai); }
+  .kpi-name {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    margin-bottom: 0.2rem;
+  }
+  .kpi-value-ex {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--orange);
+    margin-bottom: 0.2rem;
+  }
+  .kpi-item.blue   .kpi-value-ex { color: var(--blue2); }
+  .kpi-item.green  .kpi-value-ex { color: var(--green2); }
+  .kpi-item.purple .kpi-value-ex { color: var(--purple); }
+  .kpi-item.red    .kpi-value-ex { color: var(--red); }
+  .kpi-item.yellow .kpi-value-ex { color: var(--yellow); }
+  .kpi-item.ai     .kpi-value-ex { color: var(--ai); }
+  .kpi-desc { font-size: 0.75rem; color: var(--dim); line-height: 1.5; }
+
+  /* ===== タグ ===== */
+  .tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    margin-right: 0.3rem;
+  }
+  .tag.daily   { background: rgba(249,115,22,0.15); color: var(--orange); }
+  .tag.weekly  { background: rgba(168,85,247,0.15); color: var(--purple); }
+  .tag.monthly { background: rgba(22,163,74,0.15);  color: var(--green2); }
+  .tag.anytime { background: rgba(37,99,235,0.15);  color: var(--blue2); }
+
+  /* ===== 区切り線 ===== */
+  .divider {
+    height: 1px;
+    background: var(--rim);
+    margin: 2.5rem 0;
+  }
+
+  /* ===== テーブル ===== */
+  .table-wrap { overflow-x: auto; margin-bottom: 1rem; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  th {
+    text-align: left;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--rim);
+  }
+  td {
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid var(--rim2);
+    color: var(--text);
+    vertical-align: top;
+  }
+  td.label {
+    font-weight: 700;
+    color: var(--orange);
+    white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+  }
+  td.dimtext { color: var(--dim); }
+
+  /* ===== 目次カード ===== */
+  .toc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 2.5rem;
+  }
+  .toc-item {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    background: var(--card);
+    border: 1px solid var(--rim);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+  .toc-item:hover {
+    border-color: var(--orange);
+    background: rgba(249,115,22,0.07);
+  }
+  .toc-item .ticon { font-size: 1.2rem; }
+  .toc-item .ttext { flex: 1; }
+  .toc-item .tname { font-size: 0.85rem; font-weight: 700; color: var(--text); }
+  .toc-item .ttag  { font-size: 0.65rem; color: var(--dim); margin-top: 0.1rem; }
+
+  /* ===== モバイル ===== */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .content { padding: 1.25rem; }
+    .page-header { padding: 1.25rem; }
+  }
+
+  /* ===== アニメーション ===== */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .section { animation: fadeUp 0.4s ease both; }
+  .section:nth-child(1) { animation-delay: 0.05s; }
+  .section:nth-child(2) { animation-delay: 0.10s; }
+  .section:nth-child(3) { animation-delay: 0.15s; }
+  .section:nth-child(4) { animation-delay: 0.20s; }
+  .section:nth-child(5) { animation-delay: 0.25s; }
+  .section:nth-child(6) { animation-delay: 0.30s; }
+  .section:nth-child(7) { animation-delay: 0.35s; }
+  .section:nth-child(8) { animation-delay: 0.40s; }
+  .section:nth-child(9) { animation-delay: 0.45s; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ===== サイドバー ===== -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="app-name">📖 操作マニュアル</div>
+      <div class="subtitle">ShoppyWorks Bootcamp v0.8</div>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-label">はじめに</div>
+      <a class="nav-item active" href="#intro"><span class="icon">🚀</span>アプリの全体像</a>
+      <a class="nav-item" href="#daily-flow"><span class="icon">🔄</span>毎日の作業フロー</a>
+
+      <div class="nav-section-label">日次業務</div>
+      <a class="nav-item" href="#diary"><span class="icon">📅</span>ShopeeDiary（日次入力）</a>
+      <a class="nav-item" href="#analyzer"><span class="icon">📊</span>ShopeeAnalyzer（分析）</a>
+      <a class="nav-item" href="#manager"><span class="icon">📂</span>ShopeeManager（注文）</a>
+      <a class="nav-item" href="#dashboard"><span class="icon">📈</span>ダッシュボード確認</a>
+
+      <div class="nav-section-label">週次業務</div>
+      <a class="nav-item" href="#massupdate"><span class="icon">🔄</span>MassUpdate管理</a>
+      <a class="nav-item" href="#health"><span class="icon">🏥</span>アカウントヘルス</a>
+
+      <div class="nav-section-label">都度業務</div>
+      <a class="nav-item" href="#stock"><span class="icon">📦</span>ShopeeStockManager</a>
+      <a class="nav-item" href="#pasabuy"><span class="icon">🛍️</span>PasabuyManager</a>
+
+      <div class="nav-section-label">設定・その他</div>
+      <a class="nav-item" href="#goals"><span class="icon">🏆</span>目標管理</a>
+      <a class="nav-item" href="#settings"><span class="icon">⚙️</span>設定・スタッフ管理</a>
+      <a class="nav-item" href="#kpi-glossary"><span class="icon">📖</span>KPI用語集</a>
+    </div>
+  </nav>
+
+  <!-- ===== メインコンテンツ ===== -->
+  <div class="main">
+    <div class="page-header">
+      <div class="badge">📖 ShoppyWorks Bootcamp</div>
+      <h1>操作マニュアル</h1>
+      <div class="desc">受講生向け｜Shopee Philippines 輸出セラー管理ツール 完全ガイド</div>
+    </div>
+
+    <div class="content">
+
+      <!-- ===== 0. 目次 ===== -->
+      <div class="section">
+        <div class="toc-grid">
+          <a class="toc-item" href="#diary">
+            <span class="ticon">📅</span>
+            <div class="ttext"><div class="tname">ShopeeDiary</div><div class="ttag">日次 ・ 毎日入力</div></div>
+          </a>
+          <a class="toc-item" href="#analyzer">
+            <span class="ticon">📊</span>
+            <div class="ttext"><div class="tname">ShopeeAnalyzer</div><div class="ttag">日次 ・ XLSX分析</div></div>
+          </a>
+          <a class="toc-item" href="#manager">
+            <span class="ticon">📂</span>
+            <div class="ttext"><div class="tname">ShopeeManager</div><div class="ttag">日次 ・ 注文管理</div></div>
+          </a>
+          <a class="toc-item" href="#dashboard">
+            <span class="ticon">📈</span>
+            <div class="ttext"><div class="tname">ダッシュボード</div><div class="ttag">日次 ・ KPI確認</div></div>
+          </a>
+          <a class="toc-item" href="#massupdate">
+            <span class="ticon">🔄</span>
+            <div class="ttext"><div class="tname">MassUpdate管理</div><div class="ttag">週次 ・ 出品管理</div></div>
+          </a>
+          <a class="toc-item" href="#health">
+            <span class="ticon">🏥</span>
+            <div class="ttext"><div class="tname">アカウントヘルス</div><div class="ttag">週次 ・ 健全性</div></div>
+          </a>
+          <a class="toc-item" href="#stock">
+            <span class="ticon">📦</span>
+            <div class="ttext"><div class="tname">StockManager</div><div class="ttag">都度 ・ 在庫管理</div></div>
+          </a>
+          <a class="toc-item" href="#pasabuy">
+            <span class="ticon">🛍️</span>
+            <div class="ttext"><div class="tname">PasabuyManager</div><div class="ttag">都度 ・ 御用聞き</div></div>
+          </a>
+          <a class="toc-item" href="#goals">
+            <span class="ticon">🏆</span>
+            <div class="ttext"><div class="tname">目標管理</div><div class="ttag">月初 ・ KPI目標設定</div></div>
+          </a>
+        </div>
+      </div>
+
+      <!-- ===== 1. アプリ全体像 ===== -->
+      <div class="section" id="intro">
+        <div class="section-title">
+          <span class="step-num">🚀</span>アプリの全体像
+        </div>
+        <p class="section-lead">ShoppyWorks Bootcamp Appは、Shopee Philippines（フィリピン版Shopee）での輸出販売を効率化・可視化するための管理ツールです。毎日の記録、注文管理、商品分析、目標管理をすべて一つのアプリで行えます。</p>
+
+        <div class="card">
+          <div class="card-title">📱 画面の構成</div>
+          <div class="table-wrap">
+            <table>
+              <tr><th>エリア</th><th>内容</th></tr>
+              <tr><td class="label">サイドメニュー（左）</td><td class="dimtext">各ページへの移動。業務区分（日次・週次・都度）でグループ分けされています</td></tr>
+              <tr><td class="label">メインエリア（右）</td><td class="dimtext">選択したページの内容が表示されます</td></tr>
+              <tr><td class="label">🔔 ベルアイコン</td><td class="dimtext">未完了タスクのカウント通知</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="tip info">
+          <span class="tip-icon">💡</span>
+          <div class="tip-text">データはすべて<strong>あなたのアカウントに紐づいて</strong>クラウド保存されます。スマホ・PCどちらからでも同じデータにアクセスできます。</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 2. 毎日の作業フロー ===== -->
+      <div class="section" id="daily-flow">
+        <div class="section-title">
+          <span class="step-num">🔄</span>毎日の作業フロー
+        </div>
+        <p class="section-lead">毎朝（前日分）、以下の3ステップを順番に実施してください。所要時間は慣れれば10〜15分程度です。</p>
+
+        <ul class="steps">
+          <li>
+            <div class="snum">1</div>
+            <div class="sbody">
+              <div class="stitle">📅 ShopeeDiary で前日の実績を入力する</div>
+              <div class="sdesc">Shopee Seller Centerを見ながら、売上・注文数・訪問者数などを入力します。為替レートは「自動取得」ボタンで最新レートを取得できます。</div>
+            </div>
+          </li>
+          <li>
+            <div class="snum">2</div>
+            <div class="sbody">
+              <div class="stitle">📊 ShopeeAnalyzer に商品レポートをアップロードする</div>
+              <div class="sdesc">Shopee Seller Center から XLSX ファイルをダウンロードしてドラッグ＆ドロップするだけ。CTR・CVR・緊急改善件数が自動分析されます。</div>
+            </div>
+          </li>
+          <li>
+            <div class="snum">3</div>
+            <div class="sbody">
+              <div class="stitle">📂 ShopeeManager で注文・売上を確認する</div>
+              <div class="sdesc">注文レポート（XLSX）をアップロードすると、発送待ち件数・前日売上・キャンセル数が自動集計されます。</div>
+            </div>
+          </li>
+        </ul>
+
+        <div class="tip success">
+          <span class="tip-icon">✅</span>
+          <div class="tip-text">3つすべて完了すると、<strong>ダッシュボードの「日次」タブ</strong>に前日の全データが揃った状態で確認できます。</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 3. ShopeeDiary ===== -->
+      <div class="section" id="diary">
+        <div class="section-title">
+          <span class="step-num">📅</span>ShopeeDiary（日次入力）
+          <span class="tag daily">日次</span>
+        </div>
+        <p class="section-lead">前日の実績データを記録するページです。毎朝、Shopee Seller Center を開きながら入力してください。</p>
+
+        <div class="card">
+          <div class="card-title">📍 入力データの取得場所（Shopee Seller Center）</div>
+          <div class="table-wrap">
+            <table>
+              <tr><th>入力項目</th><th>Shopee Seller Center の場所</th></tr>
+              <tr><td class="label">売上 (₱)</td><td class="dimtext">Finance → Income → My Income で「前日」の数値</td></tr>
+              <tr><td class="label">注文数</td><td class="dimtext">Orders → All Orders の前日分件数</td></tr>
+              <tr><td class="label">Visitors</td><td class="dimtext">Data → Business Analytics → Shop Overview</td></tr>
+              <tr><td class="label">Product Clicks</td><td class="dimtext">Data → Business Analytics → Product Performance</td></tr>
+              <tr><td class="label">OCR (%)</td><td class="dimtext">Data → Business Analytics → Shop Overview（Order Conversion Rate）</td></tr>
+              <tr><td class="label">フォロワー数</td><td class="dimtext">Shop Profile ページに表示される「Followers」数</td></tr>
+              <tr><td class="label">出品数</td><td class="dimtext">Product → My Products の総出品数</td></tr>
+              <tr><td class="label">キャンセル数</td><td class="dimtext">Orders → All Orders でステータス「Cancelled」</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">⚙️ 操作手順</div>
+          <ul class="steps">
+            <li>
+              <div class="snum">1</div>
+              <div class="sbody">
+                <div class="stitle">日付を確認する</div>
+                <div class="sdesc">ページ上部の「日付（前日分）」が昨日の日付になっていることを確認。違う場合はカレンダーから変更してください。</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">2</div>
+              <div class="sbody">
+                <div class="stitle">為替レートを取得する</div>
+                <div class="sdesc">「為替レート」セクションの <code>自動取得</code> ボタンをクリック。₱→¥レートが自動入力されます（Payoneer手数料2%込み）。前回のレートが表示されていれば、前日と変わらない場合はそのまま使ってもOKです。</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">3</div>
+              <div class="sbody">
+                <div class="stitle">各項目を入力する</div>
+                <div class="sdesc">Shopee Seller Center を見ながら、売上・注文・訪問者数などを順番に入力します。<strong>Sales (円)</strong> は自動計算されるので入力不要です。</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">4</div>
+              <div class="sbody">
+                <div class="stitle">「保存する」ボタンを押す</div>
+                <div class="sdesc">ページ最下部の <code>保存する</code> ボタンをクリック。「✅ 保存しました！」と表示されれば完了です。</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="tip warn">
+          <span class="tip-icon">⚠️</span>
+          <div class="tip-text"><strong>入力を間違えた場合：</strong>「履歴」タブから対象日を探し、<strong>✏️ 編集</strong>ボタンで修正できます。削除も同じ場所から行えます。</div>
+        </div>
+
+        <div class="tip info">
+          <span class="tip-icon">💡</span>
+          <div class="tip-text"><strong>グラフで確認：</strong>「グラフ」タブを選ぶと、売上推移・出品数推移を折れ線グラフで確認できます。</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 4. ShopeeAnalyzer ===== -->
+      <div class="section" id="analyzer">
+        <div class="section-title">
+          <span class="step-num">📊</span>ShopeeAnalyzer（商品分析）
+          <span class="tag daily">日次</span>
+        </div>
+        <p class="section-lead">Shopee の商品パフォーマンスレポート（XLSX）を分析するページです。CTR・CVR・売上を商品単位で確認し、改善が必要な商品を特定できます。</p>
+
+        <div class="card">
+          <div class="card-title">📥 STEP 1｜Shopee からXLSXをダウンロードする</div>
+          <ul class="steps">
+            <li>
+              <div class="snum">1</div>
+              <div class="sbody">
+                <div class="stitle">Shopee Seller Center を開く</div>
+                <div class="sdesc"><code>seller.shopee.ph</code> にアクセスしてログイン</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">2</div>
+              <div class="sbody">
+                <div class="stitle">Product Performance を開く</div>
+                <div class="sdesc">Data → Business Insights → <strong>Product Performance</strong> を選択</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">3</div>
+              <div class="sbody">
+                <div class="stitle">期間を「過去30日」に設定してダウンロード</div>
+                <div class="sdesc">期間プルダウンで「<strong>過去30日</strong>」を選択 → 右上の「ダウンロード（Export）」ボタンをクリック → XLSXファイルが保存される</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📤 STEP 2｜ShopeeAnalyzer にアップロードする</div>
+          <ul class="steps">
+            <li>
+              <div class="snum">1</div>
+              <div class="sbody">
+                <div class="stitle">ShopeeAnalyzer を開く</div>
+                <div class="sdesc">サイドメニューから「📊 ShopeeAnalyzer」をクリック</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">2</div>
+              <div class="sbody">
+                <div class="stitle">XLSXをドロップする</div>
+                <div class="sdesc">画面中央のオレンジ枠のドロップゾーンに、ダウンロードしたXLSXファイルをドラッグ＆ドロップ（またはクリックしてファイル選択）</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">3</div>
+              <div class="sbody">
+                <div class="stitle">分析結果を確認する</div>
+                <div class="sdesc">自動分析が完了すると「保存しました〇件」と表示されます。その後、商品一覧・KPI・緊急改善リストが表示されます。</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📌 分析結果の見方</div>
+          <div class="kpi-grid">
+            <div class="kpi-item">
+              <div class="kpi-name">最新売上</div>
+              <div class="kpi-value-ex">₱322,368</div>
+              <div class="kpi-desc">過去30日間の商品全体の合計売上</div>
+            </div>
+            <div class="kpi-item blue">
+              <div class="kpi-name">商品数</div>
+              <div class="kpi-value-ex">132件</div>
+              <div class="kpi-desc">分析対象の出品商品数</div>
+            </div>
+            <div class="kpi-item yellow">
+              <div class="kpi-name">平均CTR</div>
+              <div class="kpi-value-ex">0.58%</div>
+              <div class="kpi-desc">クリック率。3%以上が目標</div>
+            </div>
+            <div class="kpi-item red">
+              <div class="kpi-name">平均CVR</div>
+              <div class="kpi-value-ex">0.58%</div>
+              <div class="kpi-desc">購入率。5%以上が目標</div>
+            </div>
+            <div class="kpi-item red">
+              <div class="kpi-name">緊急改善</div>
+              <div class="kpi-value-ex">26件</div>
+              <div class="kpi-desc">CTRまたはCVRが基準以下の商品数。0件を目指す</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tip warn">
+          <span class="tip-icon">🔴</span>
+          <div class="tip-text"><strong>緊急改善リストを必ず確認してください。</strong>表示された商品は早急にタイトル・画像・価格・説明文の見直しが必要です。</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 5. ShopeeManager ===== -->
+      <div class="section" id="manager">
+        <div class="section-title">
+          <span class="step-num">📂</span>ShopeeManager（注文管理）
+          <span class="tag daily">日次</span>
+        </div>
+        <p class="section-lead">注文データ・MyIncome（売上収益）を一元管理するページです。注文レポートとMyIncomeレポートをアップロードして使用します。</p>
+
+        <div class="card">
+          <div class="card-title">📁 使用するレポートの種類</div>
+          <div class="table-wrap">
+            <table>
+              <tr><th>レポート名</th><th>取得場所</th><th>用途</th></tr>
+              <tr>
+                <td class="label">注文レポート</td>
+                <td class="dimtext">Orders → My Orders → Export</td>
+                <td class="dimtext">前日・今月の受注数・売上・キャンセルを集計</td>
+              </tr>
+              <tr>
+                <td class="label">MyIncome（未リリース）</td>
+                <td class="dimtext">Finance → Income → My Income → Export</td>
+                <td class="dimtext">Shopeeから支払われる予定の収益・手数料</td>
+              </tr>
+              <tr>
+                <td class="label">MyIncome（リリース済）</td>
+                <td class="dimtext">Finance → Income → Income History → Export</td>
+                <td class="dimtext">既に入金された収益の確認</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">⚙️ 操作手順</div>
+          <ul class="steps">
+            <li>
+              <div class="snum">1</div>
+              <div class="sbody">
+                <div class="stitle">「📂 ShopeeManager」を開く</div>
+                <div class="sdesc">サイドメニューから「ShopeeManager」をクリック</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">2</div>
+              <div class="sbody">
+                <div class="stitle">各タブからXLSXをアップロードする</div>
+                <div class="sdesc">「Orders（注文）」タブ、「MyIncome（未リリース）」タブ、「MyIncome（リリース済み）」タブそれぞれにXLSXをドロップします。毎日全部アップしなくてもOKですが、注文レポートは毎日推奨です。</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">3</div>
+              <div class="sbody">
+                <div class="stitle">ダッシュボードで確認する</div>
+                <div class="sdesc">アップロード後、ダッシュボードの日次タブに「前日受注数・前日売上・発送待ち」が表示されます。</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="tip info">
+          <span class="tip-icon">💡</span>
+          <div class="tip-text"><strong>発送待ち（To Ship）</strong>件数がオレンジ色で表示されている場合は、早急にShopeeで発送手続きをしてください。発送期限を過ぎるとペナルティになります。</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 6. ダッシュボード ===== -->
+      <div class="section" id="dashboard">
+        <div class="section-title">
+          <span class="step-num">📈</span>ダッシュボード（KPI確認）
+          <span class="tag daily">日次</span>
+        </div>
+        <p class="section-lead">すべてのデータが集約される「司令塔」ページです。日次・週次・月次の3つのタブで切り替えて確認できます。</p>
+
+        <div class="card">
+          <div class="card-title">📅 日次タブ（毎朝確認）</div>
+          <div class="table-wrap">
+            <table>
+              <tr><th>セクション</th><th>内容</th></tr>
+              <tr><td class="label">🏆 前日の目標達成</td><td class="dimtext">1日目標 vs 前日実績の達成率バー。緑:達成 / 黄:ペースOK / 赤:遅れ</td></tr>
+              <tr><td class="label">📅 前日の実績</td><td class="dimtext">売上・注文数・OCR・CVR・フォロワー数（Diaryデータ）</td></tr>
+              <tr><td class="label">📦 注文レポート</td><td class="dimtext">前日受注件数・キャンセル・発送待ち（Managerデータ）</td></tr>
+              <tr><td class="label">📦 前日TOP5商品</td><td class="dimtext">前日に売れた商品ランキング（売上金額順）</td></tr>
+              <tr><td class="label">📈 パフォーマンス</td><td class="dimtext">最新XLSXの平均CTR・CVR・緊急改善件数</td></tr>
+              <tr><td class="label">📊 前回比差分</td><td class="dimtext">前回XLSXとの比較。改善/悪化商品ランキング</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📆 週次タブ / 📊 月次タブ</div>
+          <div class="table-wrap">
+            <table>
+              <tr><th>セクション</th><th>内容</th></tr>
+              <tr><td class="label">🏆 目標ペース</td><td class="dimtext">週/月の目標に対する現在の達成ペース。期待値%との比較バー</td></tr>
+              <tr><td class="label">Diary集計KPI</td><td class="dimtext">週次：直近7日合計 / 月次：今月累計の売上・注文・CVR</td></tr>
+              <tr><td class="label">商品ランキング</td><td class="dimtext">改善トップ5・悪化トップ5（XLSXデータ）</td></tr>
+              <tr><td class="label">推移グラフ</td><td class="dimtext">週次：直近7件 / 月次：直近30件の売上・CTR・CVR推移</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="tip success">
+          <span class="tip-icon">🎯</span>
+          <div class="tip-text"><strong>目標ペースの見方：</strong>縦の白い線が「今日時点の期待値」です。バーがその線を超えていれば🟡ペースOK、大きく超えていれば🎉達成、下回っていれば🔴ペース遅れです。</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 7. MassUpdate ===== -->
+      <div class="section" id="massupdate">
+        <div class="section-title">
+          <span class="step-num">🔄</span>MassUpdate管理（一括出品）
+          <span class="tag weekly">週次</span>
+        </div>
+        <p class="section-lead">商品の一括登録・価格変更・タイトル改善を管理するページです。週1回を目安に実施してください。</p>
+
+        <div class="card">
+          <div class="card-title">⚙️ 基本的な使い方</div>
+          <ul class="steps">
+            <li>
+              <div class="snum">1</div>
+              <div class="sbody">
+                <div class="stitle">「🔄 MassUpdate管理」を開く</div>
+                <div class="sdesc">サイドメニューの「週次業務」セクションから選択</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">2</div>
+              <div class="sbody">
+                <div class="stitle">XLSXをアップロードする</div>
+                <div class="sdesc">Shopee Seller Center からダウンロードした商品データXLSXをアップロードすると、商品一覧が表示されます。</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">3</div>
+              <div class="sbody">
+                <div class="stitle">商品データを確認・編集する</div>
+                <div class="sdesc">価格・タイトル・在庫数などを一覧で確認します。変更が必要な商品を修正して保存します。</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">4</div>
+              <div class="sbody">
+                <div class="stitle">Shopeeにアップロード用XLSXを出力する</div>
+                <div class="sdesc">「XLSX出力」ボタンでShopee用のファイルを生成。Shopee Seller Centerの一括アップロード機能で使用してください。</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 8. アカウントヘルス ===== -->
+      <div class="section" id="health">
+        <div class="section-title">
+          <span class="step-num">🏥</span>アカウントヘルス（健全性管理）
+          <span class="tag weekly">週次</span>
+        </div>
+        <p class="section-lead">Shopeeアカウントの健全性スコアを週次で記録・管理するページです。スコアが下がるとペナルティや出品停止につながるため、週1回の確認を必ず行ってください。</p>
+
+        <div class="card">
+          <div class="card-title">⚙️ 操作手順</div>
+          <ul class="steps">
+            <li>
+              <div class="snum">1</div>
+              <div class="sbody">
+                <div class="stitle">Shopeeでスコアを確認する</div>
+                <div class="sdesc">Shopee Seller Center → Shop → <strong>Account Health</strong> を開く。各指標のスコアを確認してください。</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">2</div>
+              <div class="sbody">
+                <div class="stitle">「🏥 アカウントヘルス」ページを開く</div>
+                <div class="sdesc">サイドメニューの「週次業務」から選択</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">3</div>
+              <div class="sbody">
+                <div class="stitle">スコアを入力して保存する</div>
+                <div class="sdesc">Overall Score・各指標（返品率・キャンセル率など）を入力して保存。グラフで週次の推移が確認できます。</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="tip danger">
+          <span class="tip-icon">🚨</span>
+          <div class="tip-text"><strong>Overall Score が低下している場合は早急に対処が必要です。</strong>キャンセル率・遅延率・違反件数を確認し、原因を特定してください。</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 9. StockManager ===== -->
+      <div class="section" id="stock">
+        <div class="section-title">
+          <span class="step-num">📦</span>ShopeeStockManager（在庫棚卸）
+          <span class="tag anytime">都度</span>
+        </div>
+        <p class="section-lead">仕入れを行ったタイミングで在庫と仕入れ原価を記録するページです。粗利計算に使われます。</p>
+
+        <div class="card">
+          <div class="card-title">⚙️ 在庫の登録手順</div>
+          <ul class="steps">
+            <li>
+              <div class="snum">1</div>
+              <div class="sbody">
+                <div class="stitle">「📦 ShopeeStockManager」を開く</div>
+                <div class="sdesc">サイドメニューの「都度業務」から選択</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">2</div>
+              <div class="sbody">
+                <div class="stitle">XLSXをアップロードまたは手動で追加する</div>
+                <div class="sdesc">在庫管理XLSXをアップロード、または「＋ 追加」ボタンから商品名・数量・仕入単価（₱）・SKUを入力</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">3</div>
+              <div class="sbody">
+                <div class="stitle">SKUを正確に入力する</div>
+                <div class="sdesc">SKUはShopeeの商品ページで確認できます。<strong>正確なSKUを入力することで、粗利計算が自動化</strong>されます。</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="tip info">
+          <span class="tip-icon">💡</span>
+          <div class="tip-text">在庫原価を登録すると、ダッシュボードの<strong>月次タブ「粗利目標ペース」</strong>に自動反映されます。仕入れのたびに更新してください。</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 10. PasabuyManager ===== -->
+      <div class="section" id="pasabuy">
+        <div class="section-title">
+          <span class="step-num">🛍️</span>PasabuyManager（御用聞き管理）
+          <span class="tag anytime">都度</span>
+        </div>
+        <p class="section-lead">フォロワーやお客様からの「この商品を売ってほしい」という依頼（Pasabuy）や問い合わせを記録・管理するページです。見積もり計算・AIオファー文章生成まで一括対応できます。</p>
+
+        <div class="card">
+          <div class="card-title">⚙️ 依頼の記録手順</div>
+          <ul class="steps">
+            <li>
+              <div class="snum">1</div>
+              <div class="sbody">
+                <div class="stitle">「🛍️ PasabuyManager」を開く</div>
+                <div class="sdesc">サイドメニューの「都度業務」から選択</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">2</div>
+              <div class="sbody">
+                <div class="stitle">「＋ 依頼追加」をクリックする</div>
+                <div class="sdesc">右上のオレンジボタンをクリックして入力フォームを表示</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">3</div>
+              <div class="sbody">
+                <div class="stitle">依頼内容を入力して保存する</div>
+                <div class="sdesc">種別（PASABUY / 問い合わせ）、商品名、数量、金額を入力。成約した場合は「CV（成約）」を「✅ 成約」にしてから保存。</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">💰 見積もり計算機能</div>
+          <p style="font-size:0.85rem;color:var(--dim,#888);margin:0 0 0.75rem">案件ごとにオファー価格を自動計算できます。為替レートはシステム設定から自動取得されます。</p>
+          <ul class="steps">
+            <li>
+              <div class="snum">1</div>
+              <div class="sbody">
+                <div class="stitle">💰 利益目標から計算（逆算モード）</div>
+                <div class="sdesc">仕入れ価格・重量・希望利益額（または利益率%）を入力して「計算する」→ 推奨オファー価格が自動算出されます。</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">2</div>
+              <div class="sbody">
+                <div class="stitle">📊 価格シミュレーション（順算モード）</div>
+                <div class="sdesc">オファー価格を直接入力して「計算する」→ 利益額・利益率がシミュレーションされます。「この価格だと儲かるか？」の確認に便利です。</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">3</div>
+              <div class="sbody">
+                <div class="stitle">🎫 バウチャー割引率の考慮</div>
+                <div class="sdesc">バウチャー割引率（%）を入力すると、割引後の実質受取額・利益額を正確に計算します。赤字になる場合は赤色で警告表示されます。</div>
+              </div>
+            </li>
+          </ul>
+          <div class="tip" style="margin-top:0.75rem">
+            <span class="tip-icon">💡</span>
+            <div class="tip-text">結果はすべて <strong>ペソ（PHP）と円（JPY）の両建て</strong> で表示されます。為替レートは「設定」ページで入力した値が自動反映されます。</div>
+          </div>
+        </div>
+
+        <div class="tip success">
+          <span class="tip-icon">📊</span>
+          <div class="tip-text">ページ上部に <strong>PASABUY件数・問い合わせ件数・CV件数</strong> が集計表示されます。成約率の改善に活用してください。</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 11. 目標管理 ===== -->
+      <div class="section" id="goals">
+        <div class="section-title">
+          <span class="step-num">🏆</span>目標管理（KPI目標設定）
+          <span class="tag monthly">月初</span>
+        </div>
+        <p class="section-lead">月初・週初に目標を設定すると、ダッシュボードに達成ペースが自動表示されます。3年後の長期目標まで設定できます。</p>
+
+        <div class="card">
+          <div class="card-title">⚙️ 目標の設定手順</div>
+          <ul class="steps">
+            <li>
+              <div class="snum">1</div>
+              <div class="sbody">
+                <div class="stitle">ダッシュボード → 「🏆 目標管理」タブを開く</div>
+                <div class="sdesc">ダッシュボードページ上部のタブから「🏆 目標管理」を選択</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">2</div>
+              <div class="sbody">
+                <div class="stitle">期間を選択する</div>
+                <div class="sdesc">「📅 今月の目標」「📆 今週の目標」「📅 1日の目標」など、設定したい期間ボタンをクリック</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">3</div>
+              <div class="sbody">
+                <div class="stitle">各KPIの目標値を入力する</div>
+                <div class="sdesc">売上（¥）・受注数・CTR・CVR・粗利・営業利益を入力。設定しない項目は空欄でOKです。</div>
+              </div>
+            </li>
+            <li>
+              <div class="snum">4</div>
+              <div class="sbody">
+                <div class="stitle">「💾 保存する」をクリックする</div>
+                <div class="sdesc">「✅ 保存しました！」と表示されれば完了。ダッシュボードの各タブに目標ペースバーが自動表示されます。</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📅 設定できる期間一覧</div>
+          <div class="table-wrap">
+            <table>
+              <tr><th>期間</th><th>推奨設定タイミング</th></tr>
+              <tr><td class="label">🚀 3年後（2029年）</td><td class="dimtext">長期ビジョン。いつでも</td></tr>
+              <tr><td class="label">🎄 2026年12月</td><td class="dimtext">年始に設定</td></tr>
+              <tr><td class="label">☀️ 2026年8月</td><td class="dimtext">繁忙期に向けた中間目標</td></tr>
+              <tr><td class="label">📅 今月の目標</td><td class="dimtext">月初（1日）に設定</td></tr>
+              <tr><td class="label">📆 今週の目標</td><td class="dimtext">週始め（月曜）に設定</td></tr>
+              <tr><td class="label">📅 1日の目標</td><td class="dimtext">日割り目標。月次から自動計算して入力</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 12. 設定 ===== -->
+      <div class="section" id="settings">
+        <div class="section-title">
+          <span class="step-num">⚙️</span>設定
+        </div>
+        <p class="section-lead">アプリ全体の設定ページです。初回ログイン後に一度確認しておきましょう。</p>
+
+        <div class="card">
+          <div class="card-title">設定項目</div>
+          <div class="table-wrap">
+            <table>
+              <tr><th>項目</th><th>説明</th></tr>
+              <tr><td class="label">通知メールアドレス</td><td class="dimtext">タスク未完了アラートの送信先（設定後に有効化）</td></tr>
+              <tr><td class="label">フィールド表示設定</td><td class="dimtext">ShopeeDiaryで使わない入力欄を非表示にできます</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ===== 13. KPI用語集 ===== -->
+      <div class="section" id="kpi-glossary">
+        <div class="section-title">
+          <span class="step-num">📖</span>KPI用語集
+        </div>
+        <p class="section-lead">アプリ内で使用されるShopee関連の指標をまとめました。</p>
+
+        <div class="kpi-grid">
+          <div class="kpi-item yellow">
+            <div class="kpi-name">CTR（クリック率）</div>
+            <div class="kpi-value-ex">目標 3%↑</div>
+            <div class="kpi-desc">検索結果でのクリック率。<br>Clicks ÷ Impressions × 100</div>
+          </div>
+          <div class="kpi-item green">
+            <div class="kpi-name">CVR（購入転換率）</div>
+            <div class="kpi-value-ex">目標 5%↑</div>
+            <div class="kpi-desc">訪問者が購入する割合。<br>Orders ÷ Visitors × 100</div>
+          </div>
+          <div class="kpi-item">
+            <div class="kpi-name">OCR（注文転換率）</div>
+            <div class="kpi-value-ex">目標 5%↑</div>
+            <div class="kpi-desc">Shopee独自指標。<br>Order Conversion Rate</div>
+          </div>
+          <div class="kpi-item blue">
+            <div class="kpi-name">Visitors</div>
+            <div class="kpi-value-ex">訪問者数</div>
+            <div class="kpi-desc">ショップページへの訪問者数</div>
+          </div>
+          <div class="kpi-item ai">
+            <div class="kpi-name">Impressions</div>
+            <div class="kpi-value-ex">表示回数</div>
+            <div class="kpi-desc">検索結果に商品が表示された回数</div>
+          </div>
+          <div class="kpi-item purple">
+            <div class="kpi-name">Pasabuy</div>
+            <div class="kpi-value-ex">御用聞き</div>
+            <div class="kpi-desc">「この商品を代わりに買ってほしい」という依頼サービス</div>
+          </div>
+          <div class="kpi-item green">
+            <div class="kpi-name">粗利</div>
+            <div class="kpi-value-ex">売上 − 手数料 − 原価</div>
+            <div class="kpi-desc">売上からShopee手数料と仕入原価を差し引いた利益</div>
+          </div>
+          <div class="kpi-item red">
+            <div class="kpi-name">緊急改善件数</div>
+            <div class="kpi-value-ex">0件を目指す</div>
+            <div class="kpi-desc">CTRまたはCVRが基準値を下回っている商品数</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">💱 為替レートについて</div>
+          <div class="tip info" style="margin-bottom:0">
+            <span class="tip-icon">💡</span>
+            <div class="tip-text">アプリ内の円換算は <strong>₱1 = (1 ÷ USD/PHP) × USD/JPY × 0.98</strong> で計算されます。0.98はPayoneer手数料（2%）を引いた値です。ShopeeDiaryの「自動取得」ボタンで毎日最新レートを取得して使用してください。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- フッター -->
+      <div style="margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--rim); text-align:center; font-size:0.75rem; color:var(--dim2);">
+        ShoppyWorks Bootcamp App 操作マニュアル v0.8.1 ｜ 2026年3月
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<script>
+// アクティブナビゲーション
+const navItems = document.querySelectorAll('.nav-item');
+const sections = document.querySelectorAll('.section[id]');
+
+function updateActive() {
+  let current = '';
+  sections.forEach(s => {
+    const top = s.getBoundingClientRect().top;
+    if (top <= 120) current = s.id;
+  });
+  navItems.forEach(item => {
+    item.classList.toggle('active', item.getAttribute('href') === '#' + current);
+  });
+}
+
+// スムーズスクロール
+navItems.forEach(item => {
+  item.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.querySelector(item.getAttribute('href'));
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+
+document.querySelector('.main').addEventListener('scroll', updateActive);
+updateActive();
+</script>
+</body>
+</html>

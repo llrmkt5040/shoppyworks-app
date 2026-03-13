@@ -11,32 +11,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { db, auth } from '../lib/firebase'
 import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore'
 
-const CHANGELOG = [
-  { date: "2026-03-12", text: "🔔 v0.6.0: タスクチェックリスト追加（日次/週次/月次・自動リセット・ベル通知バッジ）" },
-  { date: "2026-03-12", text: "🏥 v0.5.0: アカウントヘルス管理ページ追加（AI画像読み取り・週次記録・トレンド表示）" },
-  { date: "2026-03-12", text: "📂 v0.4.0: ShopeeManagerデータ連動（今月受注・発送待ち・未リリース収益→ダッシュボード）" },
-  { date: "2026-03-12", text: "🔄 v0.3.0: MassUpdate管理ページ追加（JAN・原産国・SKU分類・AI補完・XLSXダウンロード）" },
-  { date: "2026-03-12", text: "🎯 v0.2.0: ダッシュボード強化（目標ペースバー・¥メイン表示・為替USD経由2%・目標達成率グラフ）" },
-  { date: "2026-03-12", text: "👥 スタッフアクセス機能追加（設定画面からスタッフメール登録・全ページ対応）" },
-  { date: "2026-03-12", text: "🔒 Firestoreセキュリティルール設定（ユーザーデータ保護）" },
-  { date: "2026-03-12", text: "📅 ShopeeDiaryにショップURL・項目順序改善・Voucher区切り追加" },
-  { date: "2026-03-11", text: "🎯 ShopeeAnalyzerをコクピットに強化・トップページ設定" },
-  { date: "2026-03-11", text: "📊 ダッシュボードを4タブ化（日次・週次・月次・ロードマップ）" },
-  { date: "2026-03-11", text: "🔍 商品詳細テーブルに枠固定・ソート・フィルタ・条件指定を追加" },
-  { date: "2026-03-10", text: "📂 分析履歴をFirestoreに保存・履歴ページ追加" },
-  { date: "2026-03-10", text: "🏠 v0.1.0: 初期リリース（Analyzer・Dashboard・Diary・StockManager・ShopeeManager・Settings）" }
-]
-
-const ROADMAP = [
-  { status: "🔴", text: "MassUpdate大規模対応（1万件・1商品1ドキュメント方式への設計変更）" },
-  { status: "🟠", text: "メール通知（Firebase Functions・日次/週次タスク未完了アラート）" },
-  { status: "🟠", text: "Shopee API連動（注文・商品・アカウントヘルスの自動取得）" },
-  { status: "🟡", text: "アカウントヘルスAI画像読み取り（4月以降・スクショ→自動入力）" },
-  { status: "🟡", text: "アドバイスマネジメント" },
-  { status: "🟡", text: "卸メニュー（ドロップシッピング）" },
-  { status: "🔵", text: "講師コクピット（API・AI全部揃ってから）" },
-]
-
 function Toast({ msg, type }) {
   if (!msg) return null
   const bg = type === 'success' ? '#16a34a' : '#dc2626'
@@ -60,7 +34,6 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
   const [urgentCount, setUrgentCount] = useState(null)
   const [histLoading, setHistLoading] = useState(true)
 
-  // ソート・フィルタ
   const [sortKey, setSortKey] = useState('priorityScore')
   const [sortDir, setSortDir] = useState('desc')
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -76,7 +49,7 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
 
   async function loadFlags() {
     try {
-      const userId = propUid || propUid || auth.currentUser?.uid || 'anonymous'
+      const userId = propUid || auth.currentUser?.uid || 'anonymous'
       const snap = await getDocs(collection(db, 'product_flags'))
       const flags = {}
       snap.docs.forEach(d => {
@@ -89,17 +62,15 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
 
   async function setFlag(productName, flag) {
     try {
-      const userId = propUid || propUid || auth.currentUser?.uid || 'anonymous'
+      const userId = propUid || auth.currentUser?.uid || 'anonymous'
       const { query, where, getDocs: gd, setDoc, doc: docRef, deleteDoc } = await import('firebase/firestore')
       const q = query(collection(db, 'product_flags'), where('userId','==',userId), where('productName','==',productName))
       const snap = await gd(q)
       const current = productFlags[productName]
       if (current === flag) {
-        // 同じフラグをクリック → 解除
         snap.docs.forEach(d => deleteDoc(docRef(db, 'product_flags', d.id)))
         setProductFlags(prev => { const n = {...prev}; delete n[productName]; return n })
       } else {
-        // 新しいフラグをセット
         const id = userId + '_' + productName.replace(/[^a-zA-Z0-9]/g,'_').slice(0,50)
         await setDoc(docRef(db, 'product_flags', id), { userId, productName, flag, updatedAt: new Date() })
         setProductFlags(prev => ({ ...prev, [productName]: flag }))
@@ -110,7 +81,7 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
   async function loadLatestHistory() {
     setHistLoading(true)
     try {
-      const userId = propUid || propUid || auth.currentUser?.uid || 'anonymous'
+      const userId = propUid || auth.currentUser?.uid || 'anonymous'
       const snap = await getDocs(collection(db, 'xlsx_analyses'))
       const list = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
@@ -120,7 +91,6 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
       if (list.length > 0) {
         setLatestHistory(list[0])
         setUrgentCount(list[0].kpis?.urgentCount || 0)
-
       }
     } catch(e) { console.error(e) }
     setHistLoading(false)
@@ -152,7 +122,7 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
   async function saveToFirestore(result) {
     setSaving(true)
     try {
-      const userId = propUid || propUid || auth.currentUser?.uid || 'anonymous'
+      const userId = propUid || auth.currentUser?.uid || 'anonymous'
       const productsToSave = result.products.slice(0, 100).map(p => ({
         name: p.name || '', sales: p.sales || 0, ctr: p.ctr || 0,
         cvr: p.cvr || 0, bounce: p.bounce || 0,
@@ -232,39 +202,9 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
         </div>
       </div>
 
-      {/* ステータスカード */}
-      {!histLoading && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:'1rem', marginBottom:'1.5rem' }}>
-          {/* アップ状況 */}
-          <div className="card" style={{ padding:'1.1rem', borderTop:'2px solid '+(todayUploaded?'var(--green)':'var(--yellow)') }}>
-            <div style={{ fontSize:'0.6rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.4rem' }}>今日のアップ</div>
-            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.6rem', color:todayUploaded?'var(--green)':'var(--yellow)', lineHeight:1 }}>{todayUploaded ? '✅ 完了' : '⚠️ 未'}</div>
-            {latestHistory && <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.3rem' }}>{latestDateStr}</div>}
-          </div>
-          {/* 緊急改善件数 */}
-          <div className="card" style={{ padding:'1.1rem', borderTop:'2px solid '+(urgentCount>0?'var(--red)':'var(--green)') }}>
-            <div style={{ fontSize:'0.6rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.4rem' }}>緊急改善タスク</div>
-            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.6rem', color:urgentCount>0?'var(--red)':'var(--green)', lineHeight:1 }}>{urgentCount !== null ? urgentCount+'件' : '-'}</div>
-            {latestHistory && <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.3rem' }}>最終分析より</div>}
-          </div>
-          {/* 最終ファイル */}
-          <div className="card" style={{ padding:'1.1rem', borderTop:'2px solid var(--purple)' }}>
-            <div style={{ fontSize:'0.6rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.4rem' }}>最終ファイル</div>
-            <div style={{ fontSize:'0.75rem', fontWeight:900, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{latestHistory?.filename || '未アップロード'}</div>
-            {latestHistory && <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.3rem' }}>{formatDate(latestHistory.uploadedAt)}</div>}
-          </div>
-          {/* ダッシュボードリンク */}
-          <div className="card" style={{ padding:'1.1rem', borderTop:'2px solid var(--orange)', cursor:'pointer' }} onClick={() => onNavigate && onNavigate('dashboard')}>
-            <div style={{ fontSize:'0.6rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.4rem' }}>数値ダッシュボード</div>
-            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.4rem', color:'var(--orange)', lineHeight:1 }}>📈 開く →</div>
-            <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.3rem' }}>ShopeeWorksDashboard</div>
-          </div>
-        </div>
-      )}
-
       {/* アップロード履歴 */}
       {histories.length > 0 && (
-        <div className="card" style={{ padding:'1.1rem', marginTop:'1rem' }}>
+        <div className="card" style={{ padding:'1.1rem', marginBottom:'1.5rem' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'0.75rem' }}>
             <span style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700 }}>📂 アップロード履歴</span>
             <span style={{ fontSize:'0.65rem', color:'var(--orange)', fontWeight:700 }}>{histories.length}件</span>
@@ -302,32 +242,6 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
         <p style={{ fontSize:'0.75rem', color:'var(--dim2)', margin:'0 0 0.4rem' }}>またはクリックしてファイルを選択</p>
         <p style={{ fontSize:'0.68rem', color:'var(--dim)', margin:0 }}>📋 <a href="https://seller.shopee.ph/datacenter/product/performance" target="_blank" style={{ color:'var(--orange)', textDecoration:'none' }}>seller.shopee.ph › Product Performance</a> · 過去30日を選択</p>
         <input id="xlsx-input" type="file" accept=".xlsx,.xls" style={{ display:'none' }} onChange={e => handleFile(e.target.files[0])} />
-      </div>
-
-      {/* システム更新履歴 + 今後の改修予定 */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem' }}>
-        <div className="card" style={{ padding:'1.1rem' }}>
-          <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.75rem' }}>🔄 システム更新履歴</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:'0.3rem', maxHeight:'220px', overflowY:'auto', paddingRight:'0.25rem' }}>
-            {CHANGELOG.map((c, i) => (
-              <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'0.75rem', padding:'0.35rem 0', borderBottom: i < CHANGELOG.length-1 ? '1px solid var(--rim)' : 'none' }}>
-                <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.62rem', color:'var(--dim2)', whiteSpace:'nowrap', marginTop:'0.1rem', flexShrink:0 }}>{c.date}</span>
-                <span style={{ fontSize:'0.72rem', color:'var(--text)', lineHeight:1.4 }}>{c.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="card" style={{ padding:'1.1rem' }}>
-          <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--orange)', fontWeight:700, marginBottom:'0.75rem' }}>🚀 今後の改修予定</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:'0.3rem', maxHeight:'220px', overflowY:'auto', paddingRight:'0.25rem' }}>
-            {ROADMAP.map((r, i) => (
-              <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'0.5rem', padding:'0.35rem 0', borderBottom: i < ROADMAP.length-1 ? '1px solid var(--rim)' : 'none' }}>
-                <span style={{ fontSize:'0.75rem', flexShrink:0 }}>{r.status}</span>
-                <span style={{ fontSize:'0.72rem', color:'var(--text)', lineHeight:1.4 }}>{r.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   )
@@ -500,7 +414,6 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
           </div>
         )}
       </div>
-
     </div>
   )
 }
