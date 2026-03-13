@@ -79,7 +79,7 @@ export function AuthProvider({ children }) {
   const signIn  = async () => { try { setError(null); await signInWithPopup(auth, provider) } catch (err) { if (err.code !== 'auth/popup-closed-by-user') setError('ログイン失敗: ' + err.message) } }
   const signOut = () => fbSignOut(auth)
   const isAdmin = profile?.role === 'admin'
-  const isInstructor = profile?.role === 'instructor' || fbUser?.email?.toLowerCase() === 'tamaniha.hitoiki@gmail.com'
+  const isInstructor = profile?.role === 'instructor'
 
   return <AuthContext.Provider value={{ user, profile, allowData, loading, error, signIn, signOut, isAdmin, isInstructor }}>{children}</AuthContext.Provider>
 }
