@@ -17,6 +17,8 @@ import SettingsPage, { STAFF_PAGES, DEFAULT_STAFF_PERMS } from "../pages/Setting
 import CockpitPage, { useIsInstructor } from "../pages/CockpitPage"
 
 const NAV = [
+  { id: "_mgmt",         icon: "",    label: "プロジェクト管理",        sub: "",            section: "header", instructor: true },
+  { id: "cockpit",       icon: "🎓", label: "講師コクピット",           sub: "受講生管理",  instructor: true },
   { id: "dashboard",     icon: "📈", label: "Dashboard",            sub: "数値管理",   section: null },
   { id: "notice",        icon: "📢", label: "お知らせ",                sub: "更新・予定",  section: null },
   { id: "manual",        icon: "📖", label: "マニュアル",               sub: "準備中",      section: null },
@@ -31,7 +33,6 @@ const NAV = [
   { id: "massupdate",    icon: "🔄", label: "MassUpdate管理",          sub: "出品管理"   },
   { id: "accounthealth", icon: "🏥", label: "アカウントヘルス",        sub: "健全性管理" },
   { id: "settings",      icon: "⚙️", label: "設定",                    sub: ""           },
-  { id: "cockpit",       icon: "🎓", label: "講師コクピット",           sub: "受講生管理",  instructor: true },
 ]
 
 // スタッフが操作するページで、閲覧モード時に上部に表示するバナー
@@ -188,6 +189,7 @@ export default function AppLayout() {
           {NAV.map(n => {
             // セクションヘッダー
             if (n.id.startsWith('_')) {
+              if (n.instructor && user?.email?.toLowerCase() !== "tamaniha.hitoiki@gmail.com") return null
               return sideOpen ? (
                 <div key={n.id} style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--dim2)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0.75rem 0.75rem 0.25rem', opacity: 0.6 }}>
                   {n.label}
