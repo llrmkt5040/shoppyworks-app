@@ -140,6 +140,116 @@ export const useFieldSettings = () => {
   return { visible, loaded }
 }
 
+
+function SystemTab() {
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("sw_anthropic_key") || "")
+  const [showKey, setShowKey] = useState(false)
+  const [apiSaved, setApiSaved] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState(null)
+
+  function saveApiKey() {
+    if (!apiKey.trim()) {
+      localStorage.removeItem("sw_anthropic_key")
+      setApiSaved(true)
+      setTimeout(() => setApiSaved(false), 2000)
+      return
+    }
+    localStorage.setItem("sw_anthropic_key", apiKey.trim())
+    setApiSaved(true)
+    setTimeout(() => setApiSaved(false), 2000)
+  }
+
+  async function testApiKey() {
+    if (!apiKey.trim()) return alert("APIキーを入力してください")
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey.trim(),
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 10,
+          messages: [{ role: "user", content: "Hi" }]
+        })
+      })
+      const data = await res.json()
+      if (data.content?.[0]?.text) {
+        setTestResult({ ok: true, msg: "✅ 接続成功！AI機能が使えます" })
+      } else {
+        setTestResult({ ok: false, msg: "❌ エラー: " + (data.error?.message || "不明なエラー") })
+      }
+    } catch(e) {
+      setTestResult({ ok: false, msg: "❌ 接続失敗: " + e.message })
+    }
+    setTesting(false)
+  }
+
+  const maskedKey = apiKey ? apiKey.slice(0, 10) + "••••••••••••••••••••" + apiKey.slice(-4) : ""
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:"1rem" }}>
+
+      {/* Anthropic APIキー設定 */}
+      <div className="card" style={{ padding:"1.25rem", borderTop:"2px solid var(--ai)" }}>
+        <div style={{ fontSize:"0.72rem", fontWeight:700, color:"var(--ai)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:"0.75rem" }}>🤖 Anthropic APIキー</div>
+        <p style={{ fontSize:"0.78rem", color:"var(--dim2)", marginBottom:"1rem", lineHeight:1.6 }}>
+          AI機能（ダッシュボード分析・Pasabuy価格提案・MassUpdate補完）を使うには、Anthropic APIキーが必要です。<br/>
+          キーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" style={{ color:"var(--ai)" }}>console.anthropic.com</a> から取得できます。
+        </p>
+        <div style={{ display:"flex", gap:"0.5rem", marginBottom:"0.75rem" }}>
+          <input
+            type={showKey ? "text" : "password"}
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            placeholder="sk-ant-api03-..."
+            style={{ flex:1, padding:"0.55rem 0.75rem", borderRadius:8, border:"1px solid var(--rim2)", background:"var(--bg)", color:"var(--text)", fontSize:"0.82rem", outline:"none", fontFamily:"monospace" }}
+          />
+          <button onClick={() => setShowKey(v => !v)} style={{ padding:"0.55rem 0.75rem", borderRadius:8, border:"1px solid var(--rim)", background:"transparent", color:"var(--dim2)", cursor:"pointer", fontSize:"0.78rem" }}>
+            {showKey ? "🙈" : "👁"}
+          </button>
+        </div>
+        <div style={{ display:"flex", gap:"0.5rem", flexWrap:"wrap" }}>
+          <button onClick={saveApiKey} style={{ padding:"0.5rem 1.25rem", borderRadius:8, border:"none", background:apiSaved?"var(--green)":"var(--ai)", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:"0.78rem", transition:"all 0.2s" }}>
+            {apiSaved ? "✅ 保存しました" : "💾 保存"}
+          </button>
+          <button onClick={testApiKey} disabled={testing} style={{ padding:"0.5rem 1.25rem", borderRadius:8, border:"1px solid var(--ai)", background:"transparent", color:"var(--ai)", fontWeight:700, cursor:"pointer", fontSize:"0.78rem" }}>
+            {testing ? "⏳ テスト中..." : "🧪 接続テスト"}
+          </button>
+          {apiKey && (
+            <button onClick={() => { setApiKey(""); localStorage.removeItem("sw_anthropic_key") }} style={{ padding:"0.5rem 1rem", borderRadius:8, border:"1px solid rgba(239,68,68,0.3)", background:"rgba(239,68,68,0.08)", color:"#ef4444", fontWeight:700, cursor:"pointer", fontSize:"0.78rem" }}>
+              🗑 削除
+            </button>
+          )}
+        </div>
+        {testResult && (
+          <div style={{ marginTop:"0.75rem", padding:"0.6rem 0.9rem", borderRadius:8, background:testResult.ok?"rgba(16,185,129,0.08)":"rgba(239,68,68,0.08)", border:`1px solid ${testResult.ok?"rgba(16,185,129,0.3)":"rgba(239,68,68,0.3)"}`, fontSize:"0.78rem", color:testResult.ok?"#10b981":"#ef4444", fontWeight:700 }}>
+            {testResult.msg}
+          </div>
+        )}
+        {!apiKey && (
+          <div style={{ marginTop:"0.75rem", padding:"0.5rem 0.75rem", borderRadius:8, background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.3)", fontSize:"0.72rem", color:"#f59e0b" }}>
+            ⚠️ APIキー未設定のため、AI機能は使用できません
+          </div>
+        )}
+      </div>
+
+      {/* 準備中 */}
+      <div className="card" style={{ padding:"1.25rem", opacity:0.5 }}>
+        <div style={{ fontSize:"0.72rem", fontWeight:700, color:"var(--dim2)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:"0.75rem" }}>🔔 メール通知設定</div>
+        <div style={{ fontSize:"0.78rem", color:"var(--dim2)" }}>準備中...</div>
+      </div>
+
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("display")
   const [visible, setVisible] = useState(DEFAULT_VISIBLE)
@@ -379,18 +489,9 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ── システムタブ（将来用） ── */}
+      {/* ── システムタブ ── */}
       {activeTab === "system" && (
-        <div className="card" style={{padding:"3rem 1.5rem",textAlign:"center"}}>
-          <div style={{fontSize:"2rem",marginBottom:"0.75rem"}}>🔧</div>
-          <div style={{fontSize:"1rem",fontWeight:700,color:"var(--text)",marginBottom:"0.5rem"}}>システム設定</div>
-          <div style={{fontSize:"0.8rem",color:"var(--dim2)"}}>このタブは今後の機能拡張のために準備中です</div>
-          <div style={{marginTop:"1.5rem",display:"flex",flexDirection:"column",gap:"0.5rem",opacity:0.4}}>
-            <div style={{padding:"0.6rem 1rem",borderRadius:8,border:"1px dashed var(--rim)",fontSize:"0.75rem",color:"var(--dim2)"}}>🔔 メール通知設定（準備中）</div>
-            <div style={{padding:"0.6rem 1rem",borderRadius:8,border:"1px dashed var(--rim)",fontSize:"0.75rem",color:"var(--dim2)"}}>🌐 言語・タイムゾーン設定（準備中）</div>
-            <div style={{padding:"0.6rem 1rem",borderRadius:8,border:"1px dashed var(--rim)",fontSize:"0.75rem",color:"var(--dim2)"}}>📊 データエクスポート（準備中）</div>
-          </div>
-        </div>
+        <SystemTab />
       )}
     </div>
   )
