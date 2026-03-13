@@ -1,4 +1,8 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore")
+const { defineSecret } = require("firebase-functions/params")
+
+const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY")
+const FROM_EMAIL = defineSecret("FROM_EMAIL")
 const { onSchedule } = require("firebase-functions/v2/scheduler")
 const { setGlobalOptions } = require("firebase-functions/v2")
 const { initializeApp } = require("firebase-admin/app")
@@ -11,13 +15,13 @@ setGlobalOptions({ region: "asia-northeast1" })
 const db = getFirestore()
 
 function getSendGrid() {
-  const key = process.env.SENDGRID_API_KEY
+  const key = SENDGRID_API_KEY.value()
   if (!key) throw new Error("SENDGRID_API_KEY not set")
   sgMail.setApiKey(key)
   return sgMail
 }
 
-exports.notifyNewRequest = onDocumentCreated("request_logs/{docId}", async (event) => {
+exports.notifyNewRequest = onDocumentCreated({ document: "request_logs/{docId}", secrets: [SENDGRID_API_KEY, FROM_EMAIL] }, async (event) => {
   const data = event.data.data()
   if (!data?.uid) return
   try {
@@ -27,7 +31,7 @@ exports.notifyNewRequest = onDocumentCreated("request_logs/{docId}", async (even
     const sg = getSendGrid()
     await sg.send({
       to: ownerEmail,
-      from: process.env.FROM_EMAIL || "noreply@shoppyworks.com",
+      from: FROM_EMAIL.value() || "noreply@shoppyworks.com",
       subject: "Pasabuy新規問合せ: " + (data.product || "商品名なし"),
       html: "<h2>新規Pasabuy問合せ</h2><p>商品: " + (data.product || "-") + "</p><p>金額: " + (data.price || "未定") + "</p><p>買い手: " + (data.buyerName || "-") + "</p><a href='https://shoppyworks-bootcamp.web.app'>アプリで確認する</a>"
     })
@@ -37,7 +41,7 @@ exports.notifyNewRequest = onDocumentCreated("request_logs/{docId}", async (even
   }
 })
 
-exports.diaryReminder = onSchedule("0 12 * * *", async () => {
+exports.diaryReminder = onSchedule({ schedule: "0 12 * * *", secrets: [SENDGRID_API_KEY, FROM_EMAIL] }, async () => {
   try {
     const today = new Date()
     const jst = new Date(today.getTime() + 9 * 60 * 60 * 1000)
@@ -53,7 +57,7 @@ exports.diaryReminder = onSchedule("0 12 * * *", async () => {
         const sg = getSendGrid()
         await sg.send({
           to: ownerEmail,
-          from: process.env.FROM_EMAIL || "noreply@shoppyworks.com",
+          from: FROM_EMAIL.value() || "noreply@shoppyworks.com",
           subject: "本日のShopeeDiaryがまだ未記録です",
           html: "<h2>Diary未記録アラート</h2><p>本日（" + todayStr + "）のShopeeDiaryがまだ記録されていません。</p><a href='https://shoppyworks-bootcamp.web.app'>今すぐ記録する</a>"
         })
