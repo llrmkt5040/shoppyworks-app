@@ -15,6 +15,8 @@ export default function DashboardPage({ uid: propUid }) {
   const [shopeeIncome, setShopeeIncome] = useState({ unreleased: 0, released: 0 })
   const [monthlyDiarySales, setMonthlyDiarySales] = useState({ php: 0, jpy: 0, days: 0 })
   const [weeklyDiarySales, setWeeklyDiarySales] = useState({ php: 0, jpy: 0, days: 0, cvr: 0, visitors: 0, orders: 0, followers: 0 })
+  const [prevWeekDiarySales, setPrevWeekDiarySales] = useState({ php: 0, jpy: 0, orders: 0, cvr: 0 })
+  const [prevMonthDiarySales, setPrevMonthDiarySales] = useState({ php: 0, jpy: 0, orders: 0, cvr: 0 })
   const [todayDiarySales, setTodayDiarySales] = useState({ php: 0, jpy: 0 })
   const dropRef = useRef()
   const [tab, setTab] = useState('yesterday')
@@ -93,6 +95,28 @@ export default function DashboardPage({ uid: propUid }) {
       const weekFollowers = weekLogs.length > 0 ? Number(weekLogs[0].followers) || 0 : 0
       const weeklyCvr = weekVisitors > 0 ? Math.round(weekOrdersD / weekVisitors * 10000) / 100 : 0
       setWeeklyDiarySales({ php: weekPhp, jpy: weekJpy, days: weekLogs.length, cvr: weeklyCvr, visitors: weekVisitors, orders: weekOrdersD, followers: weekFollowers })
+      // 先週比（8〜14日前）
+      const prevWeekFrom = new Date(); prevWeekFrom.setDate(prevWeekFrom.getDate() - 14)
+      const prevWeekTo = new Date(); prevWeekTo.setDate(prevWeekTo.getDate() - 8)
+      const prevWeekFromStr = prevWeekFrom.toISOString().slice(0, 10)
+      const prevWeekToStr = prevWeekTo.toISOString().slice(0, 10)
+      const prevWeekLogs = allLogs.filter(l => (l.date || '') >= prevWeekFromStr && (l.date || '') <= prevWeekToStr)
+      const prevWeekPhp = prevWeekLogs.reduce((s, l) => s + (Number(l.sales_php) || 0), 0)
+      const prevWeekJpy = prevWeekLogs.reduce((s, l) => s + (Number(l.sales_jpy) || 0), 0)
+      const prevWeekVisitors = prevWeekLogs.reduce((s, l) => s + (Number(l.visitors) || 0), 0)
+      const prevWeekOrders = prevWeekLogs.reduce((s, l) => s + (Number(l.orders) || 0), 0)
+      const prevWeekCvr = prevWeekVisitors > 0 ? Math.round(prevWeekOrders / prevWeekVisitors * 10000) / 100 : 0
+      setPrevWeekDiarySales({ php: prevWeekPhp, jpy: prevWeekJpy, orders: prevWeekOrders, cvr: prevWeekCvr })
+      // 先月比
+      const prevMonthDate = new Date(); prevMonthDate.setMonth(prevMonthDate.getMonth() - 1)
+      const prevMonthStr = prevMonthDate.toISOString().slice(0, 7)
+      const prevMonthLogs = allLogs.filter(l => (l.date || '').startsWith(prevMonthStr))
+      const prevMonthPhp = prevMonthLogs.reduce((s, l) => s + (Number(l.sales_php) || 0), 0)
+      const prevMonthJpy = prevMonthLogs.reduce((s, l) => s + (Number(l.sales_jpy) || 0), 0)
+      const prevMonthVisitors = prevMonthLogs.reduce((s, l) => s + (Number(l.visitors) || 0), 0)
+      const prevMonthOrders = prevMonthLogs.reduce((s, l) => s + (Number(l.orders) || 0), 0)
+      const prevMonthCvr = prevMonthVisitors > 0 ? Math.round(prevMonthOrders / prevMonthVisitors * 10000) / 100 : 0
+      setPrevMonthDiarySales({ php: prevMonthPhp, jpy: prevMonthJpy, orders: prevMonthOrders, cvr: prevMonthCvr })
       // 当日
       const todayLog = allLogs.find(l => l.date === todayStr2)
       const visitors = Number(todayLog?.visitors) || 0
@@ -292,7 +316,7 @@ export default function DashboardPage({ uid: propUid }) {
             <div style={{ fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.4rem' }}>{k.l}</div>
             <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.9rem', color:k.a, lineHeight:1 }}>{k.v}</div>
             {k.sub && <div style={{ fontSize:'0.65rem', color:'var(--dim2)', marginTop:'0.2rem' }}>{k.sub}</div>}
-            {k.d !== undefined && <div style={{ marginTop:'0.3rem', fontSize:'0.68rem', color:'var(--dim2)' }}>前回比 <DiffBadge value={k.d} reverse={k.reverse} fmt={k.fmt} /></div>}
+            {k.d !== undefined && <div style={{ marginTop:'0.3rem', fontSize:'0.68rem', color:'var(--dim2)' }}>{k.sub2||'前回比'} <DiffBadge value={k.d} reverse={k.reverse} fmt={k.fmt} /></div>}
           </div>
         ))}
       </div>
@@ -512,9 +536,9 @@ export default function DashboardPage({ uid: propUid }) {
                 {/* Diary週次KPI */}
                 <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📆 直近7日間（Diary集計）</div>
                 <KpiCards items={[
-                  { l:'週次売上', v: weeklyDiarySales.jpy ? '¥'+weeklyDiarySales.jpy.toLocaleString() : weeklyDiarySales.php ? '₱'+Math.round(weeklyDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: weeklyDiarySales.php ? '₱'+Math.round(weeklyDiarySales.php).toLocaleString() : '' },
-                  { l:'週次注文数', v: weeklyDiarySales.orders ? weeklyDiarySales.orders+'件' : '-', a:'var(--blue, #3b82f6)' },
-                  { l:'週次CVR', v: weeklyDiarySales.cvr ? weeklyDiarySales.cvr.toFixed(2)+'%' : '-', a: weeklyDiarySales.cvr > 5 ? 'var(--green)' : weeklyDiarySales.cvr < 3 ? 'var(--red)' : 'var(--yellow)', sub: 'V:'+weeklyDiarySales.visitors+' O:'+weeklyDiarySales.orders },
+                  { l:'週次売上', v: weeklyDiarySales.jpy ? '¥'+weeklyDiarySales.jpy.toLocaleString() : weeklyDiarySales.php ? '₱'+Math.round(weeklyDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: weeklyDiarySales.php ? '₱'+Math.round(weeklyDiarySales.php).toLocaleString() : '', d: prevWeekDiarySales.jpy ? (weeklyDiarySales.jpy||Math.round(weeklyDiarySales.php)) - (prevWeekDiarySales.jpy||Math.round(prevWeekDiarySales.php)) : undefined, fmt: v => (v>0?'+':'')+Math.abs(v).toLocaleString(), sub2:'先週比' },
+                  { l:'週次注文数', v: weeklyDiarySales.orders ? weeklyDiarySales.orders+'件' : '-', a:'var(--blue, #3b82f6)', d: prevWeekDiarySales.orders ? weeklyDiarySales.orders - prevWeekDiarySales.orders : undefined, fmt: v => Math.abs(v)+'件', sub2:'先週比' },
+                  { l:'週次CVR', v: weeklyDiarySales.cvr ? weeklyDiarySales.cvr.toFixed(2)+'%' : '-', a: weeklyDiarySales.cvr > 5 ? 'var(--green)' : weeklyDiarySales.cvr < 3 ? 'var(--red)' : 'var(--yellow)', sub: 'V:'+weeklyDiarySales.visitors+' O:'+weeklyDiarySales.orders, d: prevWeekDiarySales.cvr ? weeklyDiarySales.cvr - prevWeekDiarySales.cvr : undefined, fmt: v => Math.abs(v).toFixed(2)+'%', sub2:'先週比' },
                   { l:'フォロワー', v: weeklyDiarySales.followers ? Number(weeklyDiarySales.followers).toLocaleString() : '-', a:'var(--ai)' },
                   { l:'記録日数', v: weeklyDiarySales.days+'日', a:'var(--dim2)' },
                 ]} />
@@ -578,9 +602,9 @@ export default function DashboardPage({ uid: propUid }) {
                 {/* Diary月次KPI */}
                 <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📊 今月累計（Diary集計）</div>
                 <KpiCards items={[
-                  { l:'月次売上', v: monthlyDiarySales.jpy ? '¥'+monthlyDiarySales.jpy.toLocaleString() : monthlyDiarySales.php ? '₱'+Math.round(monthlyDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: monthlyDiarySales.php ? '₱'+Math.round(monthlyDiarySales.php).toLocaleString()+' / '+monthlyDiarySales.days+'日分' : '' },
-                  { l:'月次注文数', v: monthlyDiarySales.orders ? monthlyDiarySales.orders+'件' : '-', a:'var(--blue, #3b82f6)' },
-                  { l:'月次CVR', v: monthlyDiarySales.cvr ? monthlyDiarySales.cvr.toFixed(2)+'%' : '-', a: monthlyDiarySales.cvr > 5 ? 'var(--green)' : monthlyDiarySales.cvr < 3 ? 'var(--red)' : 'var(--yellow)', sub: 'V:'+monthlyDiarySales.visitors+' O:'+monthlyDiarySales.orders },
+                  { l:'月次売上', v: monthlyDiarySales.jpy ? '¥'+monthlyDiarySales.jpy.toLocaleString() : monthlyDiarySales.php ? '₱'+Math.round(monthlyDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: monthlyDiarySales.php ? '₱'+Math.round(monthlyDiarySales.php).toLocaleString()+' / '+monthlyDiarySales.days+'日分' : '', d: prevMonthDiarySales.jpy ? (monthlyDiarySales.jpy||Math.round(monthlyDiarySales.php)) - (prevMonthDiarySales.jpy||Math.round(prevMonthDiarySales.php)) : undefined, fmt: v => Math.abs(v).toLocaleString(), sub2:'先月比' },
+                  { l:'月次注文数', v: monthlyDiarySales.orders ? monthlyDiarySales.orders+'件' : '-', a:'var(--blue, #3b82f6)', d: prevMonthDiarySales.orders ? monthlyDiarySales.orders - prevMonthDiarySales.orders : undefined, fmt: v => Math.abs(v)+'件', sub2:'先月比' },
+                  { l:'月次CVR', v: monthlyDiarySales.cvr ? monthlyDiarySales.cvr.toFixed(2)+'%' : '-', a: monthlyDiarySales.cvr > 5 ? 'var(--green)' : monthlyDiarySales.cvr < 3 ? 'var(--red)' : 'var(--yellow)', sub: 'V:'+monthlyDiarySales.visitors+' O:'+monthlyDiarySales.orders, d: prevMonthDiarySales.cvr ? monthlyDiarySales.cvr - prevMonthDiarySales.cvr : undefined, fmt: v => Math.abs(v).toFixed(2)+'%', sub2:'先月比' },
                   { l:'今月受注（Manager）', v: shopeeOrders.month+'件', a:'var(--purple)', sub: shopeeOrders.monthRevenue > 0 ? '₱'+Math.round(shopeeOrders.monthRevenue).toLocaleString() : '' },
                   { l:'記録日数', v: monthlyDiarySales.days+'日', a:'var(--dim2)' },
                 ]} />
