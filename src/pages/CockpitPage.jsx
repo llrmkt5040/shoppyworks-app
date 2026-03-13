@@ -39,6 +39,152 @@ function RankingCard({ title, icon, data, valueKey, valueFormat, color }) {
   )
 }
 
+const ROLES = [
+  { value:"participant", label:"受講生", color:"var(--blue2)", bg:"rgba(59,130,246,0.12)" },
+  { value:"support",     label:"サポート講師", color:"#a78bfa", bg:"rgba(167,139,250,0.12)" },
+]
+
+const PAGE_LABELS = {
+  dashboard:"Dashboard", actionlog:"ShopeeDiary", analyzer:"ShopeeAnalyzer",
+  shopee:"ShopeeManager", inventory:"StockManager", requests:"PasabuyManager",
+  massupdate:"MassUpdate", accounthealth:"アカウントヘルス"
+}
+
+function UserCard({ student: s, allStudents, onRefresh }) {
+  const [saving, setSaving] = useState(false)
+  const [role, setRole] = useState(s.role || "participant")
+  const [active, setActive] = useState(s.active !== false)
+  const [assigned, setAssigned] = useState(s.assigned_students || [])
+  const [pagePerms, setPagePerms] = useState(s.page_permissions || {})
+  const [expanded, setExpanded] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    try {
+      const { db } = await import("../lib/firebase")
+      const { doc, setDoc } = await import("firebase/firestore")
+      await setDoc(doc(db, "allowed_emails", s.email), {
+        active,
+        role,
+        assigned_students: role === "support" ? assigned : [],
+        page_permissions: role === "participant" ? pagePerms : {},
+      }, { merge: true })
+      onRefresh()
+    } catch(e) { alert("保存エラー: " + e.message) }
+    setSaving(false)
+  }
+
+  function toggleAssigned(uid) {
+    setAssigned(prev => prev.includes(uid) ? prev.filter(u=>u!==uid) : [...prev, uid])
+  }
+
+  function togglePagePerm(pageId) {
+    const cur = pagePerms[pageId] || "edit"
+    const next = cur === "edit" ? "view" : cur === "view" ? "none" : "edit"
+    setPagePerms(prev => ({ ...prev, [pageId]: next }))
+  }
+
+  const roleInfo = ROLES.find(r=>r.value===role) || ROLES[0]
+
+  return (
+    <div className="card" style={{ padding:"1.25rem" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:"1rem", marginBottom: expanded?"1rem":"0" }}>
+        <div style={{ flex:1 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:"0.5rem" }}>
+            <span style={{ fontWeight:700, color:"var(--text)", fontSize:"0.82rem" }}>{s.name||"—"}</span>
+            <span style={{ padding:"0.15rem 0.5rem", borderRadius:10, fontSize:"0.6rem", fontWeight:700, background:roleInfo.bg, color:roleInfo.color }}>{roleInfo.label}</span>
+            <span style={{ padding:"0.15rem 0.5rem", borderRadius:10, fontSize:"0.6rem", fontWeight:700,
+              background:active?"rgba(34,197,94,0.12)":"rgba(239,68,68,0.12)",
+              color:active?"var(--green)":"var(--red)" }}>{active?"✅ 有効":"🚫 停止"}</span>
+          </div>
+          <div style={{ fontSize:"0.62rem", color:"var(--dim2)", marginTop:"0.15rem" }}>{s.email}</div>
+          <div style={{ fontSize:"0.6rem", color:"var(--dim2)", fontFamily:"monospace" }}>{s.uid?s.uid.slice(0,16)+"…":"未ログイン"}</div>
+        </div>
+        <button onClick={()=>setExpanded(o=>!o)} style={{ padding:"0.35rem 0.75rem", borderRadius:6, border:"1px solid var(--rim)", background:"transparent", color:"var(--dim2)", fontSize:"0.72rem", cursor:"pointer" }}>
+          {expanded?"▲ 閉じる":"⚙️ 編集"}
+        </button>
+      </div>
+
+      {expanded && (
+        <div style={{ borderTop:"1px solid var(--rim)", paddingTop:"1rem", display:"flex", flexDirection:"column", gap:"1rem" }}>
+          {/* ログイン許可 */}
+          <div>
+            <div style={{ fontSize:"0.65rem", fontWeight:700, color:"var(--dim2)", marginBottom:"0.5rem" }}>🔐 ログイン許可</div>
+            <label style={{ display:"flex", alignItems:"center", gap:"0.5rem", cursor:"pointer" }}>
+              <input type="checkbox" checked={active} onChange={e=>setActive(e.target.checked)} style={{ accentColor:"var(--green)", width:15, height:15 }} />
+              <span style={{ fontSize:"0.78rem", color:"var(--text)" }}>ログインを許可する</span>
+            </label>
+          </div>
+
+          {/* ロール */}
+          <div>
+            <div style={{ fontSize:"0.65rem", fontWeight:700, color:"var(--dim2)", marginBottom:"0.5rem" }}>👤 ロール</div>
+            <div style={{ display:"flex", gap:"0.5rem" }}>
+              {ROLES.map(r => (
+                <button key={r.value} onClick={()=>setRole(r.value)} style={{
+                  padding:"0.4rem 1rem", borderRadius:8, border:`1px solid ${role===r.value?r.color:"var(--rim)"}`,
+                  background:role===r.value?r.bg:"transparent", color:role===r.value?r.color:"var(--dim2)",
+                  fontSize:"0.72rem", fontWeight:700, cursor:"pointer"
+                }}>{r.label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* サポート講師：担当受講生割り当て */}
+          {role === "support" && (
+            <div>
+              <div style={{ fontSize:"0.65rem", fontWeight:700, color:"var(--dim2)", marginBottom:"0.5rem" }}>🎓 担当受講生</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:"0.35rem" }}>
+                {allStudents.filter(st=>st.email!==s.email).map((st,j) => (
+                  <label key={j} style={{ display:"flex", alignItems:"center", gap:"0.5rem", cursor:"pointer", padding:"0.4rem 0.5rem", borderRadius:6, background:assigned.includes(st.uid||st.email)?"rgba(167,139,250,0.06)":"transparent" }}>
+                    <input type="checkbox"
+                      checked={assigned.includes(st.uid||st.email)}
+                      onChange={()=>toggleAssigned(st.uid||st.email)}
+                      style={{ accentColor:"#a78bfa", width:14, height:14 }} />
+                    <span style={{ fontSize:"0.75rem", color:"var(--text)" }}>{st.name||st.email}</span>
+                    <span style={{ fontSize:"0.6rem", color:"var(--dim2)" }}>{st.email}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 受講生：ページ権限 */}
+          {role === "participant" && (
+            <div>
+              <div style={{ fontSize:"0.65rem", fontWeight:700, color:"var(--dim2)", marginBottom:"0.5rem" }}>📄 ページ権限</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"0.35rem" }}>
+                {Object.entries(PAGE_LABELS).map(([pageId, label]) => {
+                  const perm = pagePerms[pageId] || "edit"
+                  const color = perm==="edit"?"var(--green)":perm==="view"?"var(--blue2)":"var(--red)"
+                  const bg = perm==="edit"?"rgba(34,197,94,0.08)":perm==="view"?"rgba(59,130,246,0.08)":"rgba(239,68,68,0.08)"
+                  return (
+                    <button key={pageId} onClick={()=>togglePagePerm(pageId)} style={{
+                      display:"flex", alignItems:"center", justifyContent:"space-between",
+                      padding:"0.4rem 0.6rem", borderRadius:6, border:`1px solid ${color}33`,
+                      background:bg, cursor:"pointer", fontSize:"0.72rem"
+                    }}>
+                      <span style={{ color:"var(--text)", fontWeight:600 }}>{label}</span>
+                      <span style={{ color, fontWeight:700, fontSize:"0.65rem" }}>
+                        {perm==="edit"?"✏️ 編集":perm==="view"?"👁️ 閲覧":"🚫 非表示"}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              <div style={{ fontSize:"0.6rem", color:"var(--dim2)", marginTop:"0.5rem" }}>クリックで 編集→閲覧→非表示 と切り替わります</div>
+            </div>
+          )}
+
+          <button onClick={save} disabled={saving} style={{ padding:"0.5rem 1.25rem", borderRadius:8, border:"none", background:"var(--orange)", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:"0.78rem", alignSelf:"flex-start" }}>
+            {saving?"保存中...":"💾 保存"}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function CockpitPage() {
   const [tab, setTab] = useState("progress")
   const [students, setStudents] = useState([])
@@ -230,47 +376,10 @@ export default function CockpitPage() {
 
       {/* 👥 ユーザー管理タブ */}
       {tab === "users" && (
-        <div className="card" style={{ padding:"1.25rem" }}>
-          <div style={{ fontSize:"0.7rem", fontWeight:700, color:"var(--dim2)", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"1rem" }}>👥 ログイン権限管理</div>
-          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"0.78rem" }}>
-            <thead>
-              <tr style={{ borderBottom:"1px solid var(--rim)" }}>
-                {["受講生","メールアドレス","UID","ステータス","操作"].map((h,i) => (
-                  <th key={i} style={{ padding:"0.5rem 0.75rem", textAlign:i===0?"left":"center", fontSize:"0.65rem", color:"var(--dim2)", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((s,i) => {
-                const active = s.active !== false
-                return (
-                  <tr key={i} style={{ borderBottom:"1px solid var(--rim)", opacity:active?1:0.5 }}
-                    onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <td style={{ padding:"0.75rem", fontWeight:700, color:"var(--text)" }}>{s.name||"—"}</td>
-                    <td style={{ padding:"0.75rem", textAlign:"center", fontSize:"0.72rem", color:"var(--dim2)" }}>{s.email}</td>
-                    <td style={{ padding:"0.75rem", textAlign:"center", fontSize:"0.62rem", color:"var(--dim2)", fontFamily:"monospace" }}>
-                      {s.uid?s.uid.slice(0,12)+"…":<span style={{ color:"var(--red)" }}>未ログイン</span>}
-                    </td>
-                    <td style={{ padding:"0.75rem", textAlign:"center" }}>
-                      <span style={{ padding:"0.2rem 0.6rem", borderRadius:20, fontSize:"0.65rem", fontWeight:700,
-                        background:active?"rgba(34,197,94,0.12)":"rgba(239,68,68,0.12)",
-                        color:active?"var(--green)":"var(--red)" }}>
-                        {active?"✅ 有効":"🚫 停止中"}
-                      </span>
-                    </td>
-                    <td style={{ padding:"0.75rem", textAlign:"center" }}>
-                      <button onClick={()=>toggleAccess(s.email, active)} style={{
-                        padding:"0.3rem 0.75rem", borderRadius:6, border:"none", cursor:"pointer", fontSize:"0.7rem", fontWeight:700,
-                        background:active?"rgba(239,68,68,0.12)":"rgba(34,197,94,0.12)",
-                        color:active?"var(--red)":"var(--green)"
-                      }}>{active?"停止":"許可"}</button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div style={{ display:"flex", flexDirection:"column", gap:"1rem" }}>
+          {students.map((s,i) => (
+            <UserCard key={i} student={s} allStudents={students} onRefresh={loadAll} />
+          ))}
         </div>
       )}
 
