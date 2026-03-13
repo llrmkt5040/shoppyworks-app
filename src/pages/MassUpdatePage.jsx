@@ -17,6 +17,55 @@ const SKU_CLASS = {
   unknown:  { label: '不明',   color: '#6b7280', bg: 'rgba(107,114,128,0.08)' },
 }
 
+// テンプレート別表示フィールド定義
+const TEMPLATE_FIELDS = {
+  'basic_info': [
+    { key: 'jan', label: 'JANコード' },
+    { key: 'origin', label: '原産国' },
+    { key: 'brand', label: 'ブランド' },
+    { key: 'category', label: 'カテゴリ' },
+    { key: 'weight', label: '重量(g)' },
+  ],
+  'sales_info': [
+    { key: 'price', label: '価格(₱)' },
+    { key: 'stock', label: '在庫数' },
+  ],
+  'shipping_info': [
+    { key: 'weight', label: '重量(g)' },
+    { key: 'origin', label: '原産国' },
+  ],
+  'republish': [
+    { key: 'price', label: '価格(₱)' },
+    { key: 'stock', label: '在庫数' },
+    { key: 'origin', label: '原産国' },
+  ],
+  'dts_info': [
+    { key: 'dts', label: '発送日数' },
+    { key: 'origin', label: '原産国' },
+  ],
+  'media_info': [
+    { key: 'brand', label: 'ブランド' },
+    { key: 'category', label: 'カテゴリ' },
+  ],
+}
+const TEMPLATE_LABELS = {
+  'basic_info':    'Basic Info',
+  'sales_info':    'Sales Info',
+  'shipping_info': 'Shipping Info',
+  'republish':     'Republish',
+  'dts_info':      'DTS Info',
+  'media_info':    'Media Info',
+}
+const ALL_FIELDS = [
+  { key: 'jan', label: 'JANコード' },
+  { key: 'origin', label: '原産国' },
+  { key: 'weight', label: '重量(g)' },
+  { key: 'brand', label: 'ブランド' },
+  { key: 'category', label: 'カテゴリ' },
+  { key: 'price', label: '価格(₱)' },
+  { key: 'stock', label: '在庫数' },
+]
+
 const PAGE_SIZE = 30
 
 export default function MassUpdatePage({ uid: propUid }) {
@@ -47,6 +96,7 @@ export default function MassUpdatePage({ uid: propUid }) {
   const [diff, setDiff] = useState(null)
   const [detectedTemplate, setDetectedTemplate] = useState(null)
   const [itemsLoading, setItemsLoading] = useState(false)
+  const [showAllFields, setShowAllFields] = useState(false)
 
   const uid = propUid || auth.currentUser?.uid
 
@@ -671,6 +721,23 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
                 {saving ? '保存中...' : '💾 Firestoreに保存'}
               </button>
             </div>
+            {/* テンプレートバッジ */}
+            {(() => {
+              const tmpl = products[0]?.templateType || ''
+              const label = TEMPLATE_LABELS[tmpl] || tmpl
+              if (!tmpl) return null
+              const fields = TEMPLATE_FIELDS[tmpl] || ALL_FIELDS
+              return (
+                <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'1rem', padding:'0.6rem 1rem', background:'rgba(139,92,246,0.06)', borderRadius:8, border:'1px solid rgba(139,92,246,0.2)', flexWrap:'wrap' }}>
+                  <span style={{ fontSize:'0.65rem', color:'var(--ai)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em' }}>📋 テンプレート</span>
+                  <span style={{ fontSize:'0.78rem', fontWeight:900, padding:'0.15rem 0.6rem', borderRadius:6, background:'rgba(139,92,246,0.12)', color:'var(--ai)' }}>{label}</span>
+                  <span style={{ fontSize:'0.65rem', color:'var(--dim2)' }}>表示: {(showAllFields ? ALL_FIELDS : fields).map(f=>f.label).join(' · ')}</span>
+                  <button onClick={()=>setShowAllFields(v=>!v)} style={{ marginLeft:'auto', padding:'0.25rem 0.75rem', borderRadius:6, border:'1px solid', borderColor:showAllFields?'var(--orange)':'rgba(139,92,246,0.4)', background:showAllFields?'rgba(255,107,43,0.1)':'transparent', color:showAllFields?'var(--orange)':'var(--ai)', fontSize:'0.68rem', fontWeight:700, cursor:'pointer' }}>
+                    {showAllFields ? '✅ 全フィールド表示中' : '🔲 全フィールド表示'}
+                  </button>
+                </div>
+              )
+            })()}
             {bulkMode && (
               <div style={{ padding: '1rem', background: 'rgba(255,107,43,0.05)', border: '1px solid rgba(255,107,43,0.2)', borderRadius: 10, marginBottom: '1rem' }}>
                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--orange)', marginBottom: '0.75rem' }}>✏️ 一括編集モード　{selectedIds.size > 0 && <span style={{ color: 'var(--text)' }}>（{selectedIds.size}件選択中）</span>}</div>
@@ -758,22 +825,20 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
                           {aiLoading[p.productId] ? '⏳' : '🤖'}
                         </button>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: '0.5rem' }}>
-                        {[
-                          { key: 'jan', label: 'JANコード' },
-                          { key: 'origin', label: '原産国' },
-                          { key: 'weight', label: '重量(g)' },
-                          { key: 'brand', label: 'ブランド' },
-                          { key: 'category', label: 'カテゴリ' },
-                          { key: 'price', label: '価格(₱)' },
-                          { key: 'stock', label: '在庫数' },
-                        ].map(field => (
-                          <div key={field.key}>
-                            <div style={{ fontSize: '0.58rem', color: 'var(--dim2)', fontWeight: 700, marginBottom: '0.15rem' }}>{field.label}</div>
-                            <input value={e[field.key] || ''} onChange={ev => setEdit(p.productId, field.key, ev.target.value)} style={inputStyle} placeholder="-" />
+                      {(() => {
+                        const tmpl = products.find(x=>x.productId===p.productId)?.templateType || ''
+                        const fields = showAllFields ? ALL_FIELDS : (TEMPLATE_FIELDS[tmpl] || ALL_FIELDS)
+                        return (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: '0.5rem' }}>
+                            {fields.map(field => (
+                              <div key={field.key}>
+                                <div style={{ fontSize: '0.58rem', color: 'var(--dim2)', fontWeight: 700, marginBottom: '0.15rem' }}>{field.label}</div>
+                                <input value={e[field.key] || ''} onChange={ev => setEdit(p.productId, field.key, ev.target.value)} style={inputStyle} placeholder="-" />
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        )
+                      })()}
                     </div>
                   )
                 })}
