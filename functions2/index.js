@@ -31,7 +31,7 @@ exports.notifyNewRequest = onDocumentCreated({ document: "request_logs/{docId}",
     const sg = getSendGrid()
     await sg.send({
       to: ownerEmail,
-      from: FROM_EMAIL.value() || "noreply@shoppyworks.com",
+      from: { name: "ShoppyWorks BootCamp", email: FROM_EMAIL.value() || "noreply@shoppyworks.com" },
       subject: "Pasabuy新規問合せ: " + (data.product || "商品名なし"),
       html: "<h2>新規Pasabuy問合せ</h2><p>商品: " + (data.product || "-") + "</p><p>金額: " + (data.price || "未定") + "</p><p>買い手: " + (data.buyerName || "-") + "</p><a href='https://shoppyworks-bootcamp.web.app'>アプリで確認する</a>"
     })
@@ -57,7 +57,7 @@ exports.diaryReminder = onSchedule({ schedule: "0 12 * * *", secrets: [SENDGRID_
         const sg = getSendGrid()
         await sg.send({
           to: ownerEmail,
-          from: FROM_EMAIL.value() || "noreply@shoppyworks.com",
+          from: { name: "ShoppyWorks BootCamp", email: FROM_EMAIL.value() || "noreply@shoppyworks.com" },
           subject: "本日のShopeeDiaryがまだ未記録です",
           html: "<h2>Diary未記録アラート</h2><p>本日（" + todayStr + "）のShopeeDiaryがまだ記録されていません。</p><a href='https://shoppyworks-bootcamp.web.app'>今すぐ記録する</a>"
         })
