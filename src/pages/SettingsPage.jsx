@@ -141,6 +141,80 @@ export const useFieldSettings = () => {
 }
 
 
+
+function EmailNotifySection() {
+  const [notifyEmail, setNotifyEmail] = useState("")
+  const [notifyDiary, setNotifyDiary] = useState(false)
+  const [notifyPasabuy, setNotifyPasabuy] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { db, auth } = await import("../lib/firebase")
+        const { doc, getDoc } = await import("firebase/firestore")
+        const snap = await getDoc(doc(db, "user_settings", auth.currentUser?.uid))
+        if (snap.exists()) {
+          setNotifyEmail(snap.data().notify_email || "")
+          setNotifyDiary(snap.data().notify_diary || false)
+          setNotifyPasabuy(snap.data().notify_pasabuy || false)
+        }
+      } catch(e) { console.error(e) }
+    }
+    load()
+  }, [])
+
+  async function save() {
+    setSaving(true)
+    try {
+      const { db, auth } = await import("../lib/firebase")
+      const { doc, setDoc } = await import("firebase/firestore")
+      await setDoc(doc(db, "user_settings", auth.currentUser?.uid), {
+        notify_email: notifyEmail,
+        notify_diary: notifyDiary,
+        notify_pasabuy: notifyPasabuy,
+      }, { merge: true })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch(e) { alert("保存エラー: " + e.message) }
+    setSaving(false)
+  }
+
+  return (
+    <div className="card" style={{ padding:"1.25rem", borderTop:"2px solid #f59e0b" }}>
+      <div style={{ fontSize:"0.72rem", fontWeight:700, color:"#f59e0b", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:"0.75rem" }}>🔔 メール通知設定</div>
+      <p style={{ fontSize:"0.78rem", color:"var(--dim2)", marginBottom:"1rem", lineHeight:1.6 }}>
+        通知を受け取るメールアドレスを設定し、受け取りたい通知をONにしてください。
+      </p>
+      <div style={{ marginBottom:"1rem" }}>
+        <div style={{ fontSize:"0.65rem", color:"var(--dim2)", fontWeight:700, marginBottom:"0.25rem" }}>通知先メールアドレス</div>
+        <input
+          type="email"
+          value={notifyEmail}
+          onChange={e => setNotifyEmail(e.target.value)}
+          placeholder="your@email.com"
+          style={{ width:"100%", padding:"0.55rem 0.75rem", borderRadius:8, border:"1px solid var(--rim2)", background:"var(--bg)", color:"var(--text)", fontSize:"0.82rem", outline:"none", boxSizing:"border-box" }}
+        />
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", gap:"0.5rem", marginBottom:"1rem" }}>
+        {[
+          { key:"diary", label:"📅 Diary未記録アラート（毎日21:00 JST）", val:notifyDiary, set:setNotifyDiary },
+          { key:"pasabuy", label:"📦 Pasabuy新規問合せ通知", val:notifyPasabuy, set:setNotifyPasabuy },
+        ].map(item => (
+          <label key={item.key} style={{ display:"flex", alignItems:"center", gap:"0.75rem", cursor:"pointer", padding:"0.6rem 0.75rem", borderRadius:8, background:item.val?"rgba(245,158,11,0.06)":"rgba(255,255,255,0.02)", border:`1px solid ${item.val?"rgba(245,158,11,0.3)":"var(--rim)"}`, transition:"all 0.2s" }}>
+            <input type="checkbox" checked={item.val} onChange={e => item.set(e.target.checked)} style={{ width:16, height:16, accentColor:"#f59e0b", cursor:"pointer" }} />
+            <span style={{ fontSize:"0.82rem", color:item.val?"var(--text)":"var(--dim2)" }}>{item.label}</span>
+          </label>
+        ))}
+      </div>
+      <button onClick={save} disabled={saving} style={{ padding:"0.5rem 1.25rem", borderRadius:8, border:"none", background:saved?"var(--green)":"#f59e0b", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:"0.78rem", transition:"all 0.2s" }}>
+        {saving ? "保存中..." : saved ? "✅ 保存しました" : "💾 保存"}
+      </button>
+    </div>
+  )
+}
+
 function SystemTab() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("sw_anthropic_key") || "")
   const [showKey, setShowKey] = useState(false)
@@ -240,11 +314,8 @@ function SystemTab() {
         )}
       </div>
 
-      {/* 準備中 */}
-      <div className="card" style={{ padding:"1.25rem", opacity:0.5 }}>
-        <div style={{ fontSize:"0.72rem", fontWeight:700, color:"var(--dim2)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:"0.75rem" }}>🔔 メール通知設定</div>
-        <div style={{ fontSize:"0.78rem", color:"var(--dim2)" }}>準備中...</div>
-      </div>
+      {/* メール通知設定 */}
+      <EmailNotifySection />
 
     </div>
   )
