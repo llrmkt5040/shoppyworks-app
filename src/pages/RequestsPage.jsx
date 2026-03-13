@@ -96,27 +96,199 @@ function Dashboard({ items }) {
   )
 }
 
-function AIModal({ item, onClose }) {
-  const [analysis, setAnalysis] = useState("")
-  const [loading, setLoading] = useState(true)
-  useEffect(()=>{
-    async function run(){
-      try {
-        const prompt = `ShoppyWorks PASABUYセラー向けAIとして以下の案件をアドバイスしてください。\n商品:${item.product} 金額:PHP${item.price||"未定"} ステータス:${STATUS_CONFIG[item.status||"new"]?.label}\n1.成約可能性と注意点 2.価格設定ヒント 3.次のアクション\n日本語200文字以内で。`
-        const res = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,messages:[{role:"user",content:prompt}]})})
-        const data = await res.json()
-        setAnalysis(data.content[0].text)
-      } catch(e){ setAnalysis("エラー: "+e.message) }
-      setLoading(false)
-    }
-    run()
-  },[])
+function AIModal({ item, onClose, onSaveOffer }) {
+  const [tab, setTab] = useState("price")
+  const [loading, setLoading] = useState(false)
+  const [priceResult, setPriceResult] = useState(null)
+  const [offerResult, setOfferResult] = useState(null)
+  const [copied, setCopied] = useState("")
+
+  async function analyzePrice() {
+    setLoading(true)
+    try {
+      const costPhp = parseFloat(item.price) || 0
+      const weightG = parseFloat(item.weight) || 200
+      const shippingPhp = calcShippingPHP(weightG)
+      const prompt = `あなたはShopeeフィリピンの販売コンサルタントです。以下の仕入れ情報から最適な販売価格を提案してください。
+
+商品名: ${item.product}
+仕入れ価格（交渉中/予定）: ₱${costPhp || "未設定"}
+重量: ${weightG}g
+送料（Shopee基準）: ₱${shippingPhp}
+数量: ${item.qty || 1}個
+
+以下の形式でJSONのみ返してください（説明文不要）：
+{
+  "recommended_price": 数値,
+  "min_price": 数値,
+  "max_price": 数値,
+  "estimated_profit": 数値,
+  "profit_margin": 数値,
+  "reasoning": "価格設定の根拠（日本語2行以内）",
+  "tips": ["販売のコツ1", "販売のコツ2", "販売のコツ3"]
+}`
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 600, messages: [{ role: "user", content: prompt }] })
+      })
+      const data = await res.json()
+      const text = data.content[0].text.replace(/```json|```/g, "").trim()
+      setPriceResult(JSON.parse(text))
+    } catch(e) { setPriceResult({ error: "分析失敗: " + e.message }) }
+    setLoading(false)
+  }
+
+  async function generateOffer() {
+    setLoading(true)
+    try {
+      const prompt = `あなたはShopeeフィリピンで仕入れ交渉をする日本人バイヤーです。以下の案件に対して英語のオファーメッセージを3パターン生成してください。
+
+商品名: ${item.product}
+現在の価格: ₱${item.price || "未定"}
+数量: ${item.qty || 1}個
+備考: ${item.note || "なし"}
+
+以下の形式でJSONのみ返してください（説明文不要）：
+{
+  "normal": {
+    "label": "通常交渉",
+    "message": "英語メッセージ（3〜5文）"
+  },
+  "urgent": {
+    "label": "緊急・即決",
+    "message": "英語メッセージ（2〜3文、即決感を出す）"
+  },
+  "followup": {
+    "label": "フォローアップ",
+    "message": "英語メッセージ（前回連絡からのフォロー、2〜3文）"
+  }
+}`
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 800, messages: [{ role: "user", content: prompt }] })
+      })
+      const data = await res.json()
+      const text = data.content[0].text.replace(/```json|```/g, "").trim()
+      setOfferResult(JSON.parse(text))
+    } catch(e) { setOfferResult({ error: "生成失敗: " + e.message }) }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (tab === "price") analyzePrice()
+    else generateOffer()
+  }, [tab])
+
+  function copyText(text, key) {
+    navigator.clipboard.writeText(text)
+    setCopied(key)
+    setTimeout(() => setCopied(""), 2000)
+  }
+
+  const TABS = [
+    { id: "price", label: "💰 価格提案" },
+    { id: "offer", label: "✉️ オファー文" },
+  ]
+
   return (
-    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000 }} onClick={onClose}>
-      <div style={{ background:"var(--bg)",border:"1px solid var(--rim)",borderRadius:12,padding:"1.5rem",maxWidth:480,width:"90%" }} onClick={e=>e.stopPropagation()}>
-        <div style={{ fontWeight:700,marginBottom:"0.75rem" }}>AI分析: {item.product}</div>
-        {loading?<div style={{ color:"var(--dim2)" }}>分析中...</div>:<div style={{ fontSize:"0.85rem",lineHeight:1.8 }}>{analysis}</div>}
-        <button onClick={onClose} style={{ marginTop:"1rem",padding:"0.5rem 1.5rem",borderRadius:8,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",cursor:"pointer" }}>閉じる</button>
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:"1rem" }} onClick={onClose}>
+      <div style={{ background:"var(--bg)",border:"1px solid rgba(129,140,248,0.3)",borderRadius:16,width:"100%",maxWidth:520,maxHeight:"85vh",overflow:"hidden",display:"flex",flexDirection:"column" }} onClick={e=>e.stopPropagation()}>
+        {/* ヘッダー */}
+        <div style={{ padding:"1rem 1.25rem",borderBottom:"1px solid var(--rim)",background:"linear-gradient(135deg,rgba(129,140,248,0.08),rgba(129,140,248,0.02))" }}>
+          <div style={{ fontSize:"0.7rem",color:"#818cf8",fontWeight:700,marginBottom:"0.2rem",textTransform:"uppercase",letterSpacing:"0.1em" }}>🤖 AI アシスタント</div>
+          <div style={{ fontSize:"0.9rem",fontWeight:900,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.product}</div>
+        </div>
+        {/* タブ */}
+        <div style={{ display:"flex",borderBottom:"1px solid var(--rim)" }}>
+          {TABS.map(t => (
+            <div key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1,padding:"0.75rem",textAlign:"center",fontSize:"0.8rem",fontWeight:700,cursor:"pointer",color:tab===t.id?"#818cf8":"var(--dim2)",borderBottom:tab===t.id?"2px solid #818cf8":"2px solid transparent",transition:"all 0.2s" }}>{t.label}</div>
+          ))}
+        </div>
+        {/* コンテンツ */}
+        <div style={{ flex:1,overflow:"auto",padding:"1.25rem" }}>
+          {loading && (
+            <div style={{ textAlign:"center",padding:"2.5rem 0" }}>
+              <div className="spinner" style={{ borderColor:"rgba(129,140,248,0.2)",borderTopColor:"#818cf8",margin:"0 auto" }} />
+              <div style={{ fontSize:"0.75rem",color:"#818cf8",marginTop:"0.75rem" }}>AIが分析中...</div>
+            </div>
+          )}
+
+          {/* 価格提案タブ */}
+          {!loading && tab === "price" && priceResult && (
+            priceResult.error ? <div style={{ color:"var(--red)",fontSize:"0.8rem" }}>{priceResult.error}</div> : (
+              <div>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem",marginBottom:"1rem" }}>
+                  {[
+                    { l:"推奨販売価格", v:"₱"+priceResult.recommended_price?.toLocaleString(), c:"#818cf8" },
+                    { l:"最低価格", v:"₱"+priceResult.min_price?.toLocaleString(), c:"var(--red)" },
+                    { l:"最高価格", v:"₱"+priceResult.max_price?.toLocaleString(), c:"var(--green)" },
+                  ].map(k => (
+                    <div key={k.l} style={{ padding:"0.75rem",borderRadius:10,border:"1px solid var(--rim)",background:"rgba(255,255,255,0.02)",textAlign:"center" }}>
+                      <div style={{ fontSize:"0.6rem",color:"var(--dim2)",fontWeight:700,marginBottom:"0.3rem" }}>{k.l}</div>
+                      <div style={{ fontSize:"1.1rem",fontWeight:900,color:k.c }}>{k.v}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"1rem" }}>
+                  <div style={{ padding:"0.75rem",borderRadius:10,border:"1px solid var(--rim)",background:"rgba(16,185,129,0.05)" }}>
+                    <div style={{ fontSize:"0.6rem",color:"var(--dim2)",fontWeight:700,marginBottom:"0.3rem" }}>予想利益</div>
+                    <div style={{ fontSize:"1.2rem",fontWeight:900,color:"#10b981" }}>₱{priceResult.estimated_profit?.toLocaleString()}</div>
+                  </div>
+                  <div style={{ padding:"0.75rem",borderRadius:10,border:"1px solid var(--rim)",background:"rgba(16,185,129,0.05)" }}>
+                    <div style={{ fontSize:"0.6rem",color:"var(--dim2)",fontWeight:700,marginBottom:"0.3rem" }}>利益率</div>
+                    <div style={{ fontSize:"1.2rem",fontWeight:900,color:"#10b981" }}>{priceResult.profit_margin}%</div>
+                  </div>
+                </div>
+                <div style={{ padding:"0.75rem",borderRadius:10,background:"rgba(129,140,248,0.06)",border:"1px solid rgba(129,140,248,0.2)",marginBottom:"1rem",fontSize:"0.78rem",color:"var(--text)",lineHeight:1.6 }}>
+                  💡 {priceResult.reasoning}
+                </div>
+                {priceResult.tips?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize:"0.65rem",fontWeight:700,color:"var(--dim2)",marginBottom:"0.5rem",textTransform:"uppercase" }}>販売のコツ</div>
+                    {priceResult.tips.map((tip,i) => (
+                      <div key={i} style={{ fontSize:"0.75rem",padding:"0.3rem 0 0.3rem 0.75rem",borderLeft:"2px solid rgba(129,140,248,0.4)",marginBottom:"0.3rem",color:"var(--text)" }}>
+                        {tip}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          )}
+
+          {/* オファー文タブ */}
+          {!loading && tab === "offer" && offerResult && (
+            offerResult.error ? <div style={{ color:"var(--red)",fontSize:"0.8rem" }}>{offerResult.error}</div> : (
+              <div style={{ display:"flex",flexDirection:"column",gap:"0.75rem" }}>
+                {Object.entries(offerResult).map(([key, val]) => (
+                  <div key={key} style={{ borderRadius:10,border:"1px solid var(--rim)",overflow:"hidden" }}>
+                    <div style={{ padding:"0.5rem 0.75rem",background:"rgba(129,140,248,0.08)",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+                      <span style={{ fontSize:"0.72rem",fontWeight:700,color:"#818cf8" }}>{val.label}</span>
+                      <div style={{ display:"flex",gap:"0.4rem" }}>
+                        <button onClick={()=>copyText(val.message, key)} style={{ padding:"0.2rem 0.6rem",borderRadius:6,border:"1px solid rgba(129,140,248,0.3)",background:copied===key?"rgba(16,185,129,0.2)":"transparent",color:copied===key?"#10b981":"#818cf8",fontSize:"0.68rem",cursor:"pointer",fontWeight:700 }}>
+                          {copied===key?"✅ コピー済み":"📋 コピー"}
+                        </button>
+                        <button onClick={()=>onSaveOffer && onSaveOffer(val.message)} style={{ padding:"0.2rem 0.6rem",borderRadius:6,border:"1px solid rgba(255,107,43,0.3)",background:"rgba(255,107,43,0.08)",color:"var(--orange)",fontSize:"0.68rem",cursor:"pointer",fontWeight:700 }}>
+                          💾 保存
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ padding:"0.75rem",fontSize:"0.78rem",color:"var(--text)",lineHeight:1.7,whiteSpace:"pre-wrap",background:"rgba(255,255,255,0.01)" }}>
+                      {val.message}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+        {/* フッター */}
+        <div style={{ padding:"0.75rem 1.25rem",borderTop:"1px solid var(--rim)",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <button onClick={()=>tab==="price"?analyzePrice():generateOffer()} style={{ padding:"0.35rem 0.9rem",borderRadius:8,border:"1px solid rgba(129,140,248,0.3)",background:"transparent",color:"#818cf8",fontSize:"0.72rem",cursor:"pointer",fontWeight:700 }}>🔄 再生成</button>
+          <button onClick={onClose} style={{ padding:"0.35rem 1rem",borderRadius:8,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",cursor:"pointer",fontSize:"0.78rem" }}>閉じる</button>
+        </div>
       </div>
     </div>
   )
@@ -474,7 +646,15 @@ export default function RequestsPage({ uid }) {
 
   return (
     <div style={{ padding:"1.5rem" }}>
-      {aiTarget&&<AIModal item={aiTarget} onClose={()=>setAiTarget(null)} />}
+      {aiTarget&&<AIModal item={aiTarget} onClose={()=>setAiTarget(null)} onSaveOffer={async (msg)=>{
+  try {
+    const {db}=await import("../lib/firebase")
+    const {doc,updateDoc}=await import("firebase/firestore")
+    await updateDoc(doc(db,"request_logs",aiTarget.id),{offerEn:msg})
+    setItems(prev=>prev.map(i=>i.id===aiTarget.id?{...i,offerEn:msg}:i))
+    alert("オファー文を保存しました")
+  } catch(e){ alert("保存失敗: "+e.message) }
+}} />}
       {!showForm&&<Dashboard items={items} />}
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem" }}>
         <div style={{ fontSize:"0.88rem",fontWeight:700,color:"var(--text)" }}>📋 案件一覧</div>
@@ -504,7 +684,7 @@ export default function RequestsPage({ uid }) {
                         {Object.entries(STATUS_CONFIG).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                       </select>
                       <button onClick={()=>{ setEditingItem(item); setCreating(false) }} style={{ padding:"0.3rem 0.6rem",borderRadius:6,border:"1px solid rgba(251,146,60,0.3)",background:"rgba(251,146,60,0.1)",color:"var(--orange)",fontSize:"0.72rem",cursor:"pointer" }}>✏️</button>
-                      <button onClick={()=>setAiTarget(item)} style={{ padding:"0.3rem 0.6rem",borderRadius:6,border:"1px solid rgba(129,140,248,0.3)",background:"rgba(129,140,248,0.1)",color:"#818cf8",fontSize:"0.72rem",cursor:"pointer" }}>AI</button>
+                      <button onClick={()=>setAiTarget(item)} style={{ padding:"0.3rem 0.6rem",borderRadius:6,border:"1px solid rgba(129,140,248,0.3)",background:"rgba(129,140,248,0.1)",color:"#818cf8",fontSize:"0.72rem",cursor:"pointer",fontWeight:700 }}>🤖 AI</button>
                       <button onClick={()=>deleteItem(item.id)} style={{ padding:"0.3rem 0.6rem",borderRadius:6,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.1)",color:"#ef4444",fontSize:"0.72rem",cursor:"pointer" }}>削除</button>
                     </div>
                     {item.url&&(<div style={{ marginTop:"0.4rem",fontSize:"0.72rem" }}><a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color:"#818cf8",textDecoration:"none" }}>🔗 仕入れURL</a></div>)}
