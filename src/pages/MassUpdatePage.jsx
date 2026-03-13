@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { db, auth } from '../lib/firebase'
-import { collection, getDocs, addDoc, serverTimestamp, doc, setDoc, getDoc, writeBatch } from 'firebase/firestore'
+import { collection, getDocs, addDoc, serverTimestamp, doc, setDoc, getDoc, writeBatch, query, where } from 'firebase/firestore'
 
 function classifySku(sku) {
   if (!sku) return 'unknown'
@@ -33,7 +33,6 @@ export default function MassUpdatePage({ uid: propUid }) {
   const [page, setPage] = useState(1)
   const [saving, setSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState(null)
-  // 一括編集
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [bulkField, setBulkField] = useState('origin')
@@ -45,8 +44,9 @@ export default function MassUpdatePage({ uid: propUid }) {
   const [dbSkuFilter, setDbSkuFilter] = useState('all')
   const [dbPage, setDbPage] = useState(1)
   const [dbLoading, setDbLoading] = useState(false)
-  const [diff, setDiff] = useState(null) // 差分データ
-  const [detectedTemplate, setDetectedTemplate] = useState(null) // テンプレート種別
+  const [diff, setDiff] = useState(null)
+  const [detectedTemplate, setDetectedTemplate] = useState(null)
+  const [itemsLoading, setItemsLoading] = useState(false)
 
   const uid = propUid || auth.currentUser?.uid
 
@@ -55,6 +55,7 @@ export default function MassUpdatePage({ uid: propUid }) {
   async function loadAll() {
     if (!uid) return
     try {
+      // メタ情報のみ取得（productsは含まない）
       const snap = await getDocs(collection(db, 'mass_updates'))
       const list = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
@@ -62,63 +63,95 @@ export default function MassUpdatePage({ uid: propUid }) {
         .sort((a, b) => (b.uploadedAt?.seconds || 0) - (a.uploadedAt?.seconds || 0))
       setHistories(list)
       if (list.length > 0) {
-        await loadHistoryWithEdits(list[0])
+        await loadHistoryItems(list[0])
       }
       const invSnap = await getDocs(collection(db, 'inventory_items'))
       const invList = invSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.uid === uid)
       setInventory(invList)
-      // 商品DB読み込み
       await loadProductDB()
     } catch(e) { console.error(e) }
   }
 
-  async function loadHistoryWithEdits(history) {
-    const prods = history.products || []
-    setProducts(prods)
+  // 新方式：mass_update_itemsから商品を取得
+  async function loadHistoryItems(history) {
+    setItemsLoading(true)
     setCurrentHistoryId(history.id)
     setPage(1)
     setSelectedIds(new Set())
-    // Firestoreから保存済み編集データを読み込む
     try {
-      const editSnap = await getDoc(doc(db, 'mass_update_edits', `${uid}_${history.id}`))
-      if (editSnap.exists()) {
-        setEditMap(editSnap.data().editMap || {})
-        setLastSaved(editSnap.data().savedAt?.toDate ? editSnap.data().savedAt.toDate() : null)
-      } else {
-        initEditMap(prods)
-        setLastSaved(null)
-      }
-    } catch(e) {
-      initEditMap(prods)
-    }
+      const q = query(collection(db, 'mass_update_items'), where('historyId', '==', history.id), where('uid', '==', uid))
+      const snap = await getDocs(q)
+      const items = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+
+      // 旧方式フォールバック（移行前のデータ対応）
+      const prods = items.length > 0 ? items : (history.products || [])
+      setProducts(prods)
+
+      // editMapをmass_update_itemsから構築
+      const map = {}
+      prods.forEach(p => {
+        map[p.productId] = {
+          jan: p.jan || '',
+          origin: p.origin || 'Japan',
+          weight: p.weight || '',
+          category: p.category || '',
+          brand: p.brand || '',
+          price: p.price || '',
+          stock: p.stock || '',
+          skuClass: p.skuClass || classifySku(p.sku),
+          aiFixSuggestion: p.aiFixSuggestion || '',
+        }
+      })
+      setEditMap(map)
+
+      // 旧方式のeditMapも確認してマージ
+      try {
+        const editSnap = await getDoc(doc(db, 'mass_update_edits', `${uid}_${history.id}`))
+        if (editSnap.exists()) {
+          const oldMap = editSnap.data().editMap || {}
+          setEditMap(prev => {
+            const merged = { ...prev }
+            Object.entries(oldMap).forEach(([pid, e]) => {
+              if (merged[pid]) {
+                // 旧データで埋まっている値を優先してマージ
+                Object.entries(e).forEach(([k, v]) => {
+                  if (v && !merged[pid][k]) merged[pid][k] = v
+                })
+              }
+            })
+            return merged
+          })
+          setLastSaved(editSnap.data().savedAt?.toDate ? editSnap.data().savedAt.toDate() : null)
+        }
+      } catch(e) {}
+    } catch(e) { console.error(e) }
+    setItemsLoading(false)
   }
 
-  function initEditMap(prods) {
-    const map = {}
-    prods.forEach(p => {
-      map[p.productId] = {
-        jan: '', origin: 'Japan', weight: '', category: '',
-        brand: '', price: '', stock: '',
-        skuClass: classifySku(p.sku),
-      }
-    })
-    setEditMap(map)
-  }
-
-  // 編集内容をFirestoreに保存
+  // 新方式：編集内容をmass_update_itemsに保存（1商品1ドキュメント）
   async function saveEdits() {
     if (!uid || !currentHistoryId) return
     setSaving(true)
     try {
-      await setDoc(doc(db, 'mass_update_edits', `${uid}_${currentHistoryId}`), {
-        uid, historyId: currentHistoryId,
-        editMap,
-        savedAt: serverTimestamp(),
-        productCount: products.length,
-      })
+      const BATCH_SIZE = 499
+      const entries = Object.entries(editMap)
+      for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db)
+        const chunk = entries.slice(i, i + BATCH_SIZE)
+        chunk.forEach(([productId, e]) => {
+          const ref = doc(db, 'mass_update_items', `${uid}_${currentHistoryId}_${productId}`)
+          batch.set(ref, {
+            uid,
+            historyId: currentHistoryId,
+            productId,
+            ...e,
+            savedAt: serverTimestamp(),
+          }, { merge: true })
+        })
+        await batch.commit()
+      }
       const now = new Date()
       setLastSaved(now)
-      // 商品DBにも反映
       await syncEditsToProductDB()
     } catch(e) { alert('保存エラー: ' + e.message) }
     setSaving(false)
@@ -138,57 +171,55 @@ export default function MassUpdatePage({ uid: propUid }) {
     setDbLoading(false)
   }
 
-  // XLSXアップ時に商品マスタへupsert
   async function saveToProductDB(prods) {
     if (!uid || !prods.length) return
     try {
-      const batch = writeBatch(db)
-      const now = serverTimestamp()
-      // 既存DBを取得してfirstSeen保持
+      const BATCH_SIZE = 499
       const snap = await getDocs(collection(db, 'product_master'))
       const existingMap = {}
       snap.docs.filter(d => d.data().uid === uid).forEach(d => { existingMap[d.data().productId] = d.data() })
-      prods.forEach(p => {
-        const ref = doc(db, 'product_master', `${uid}_${p.productId}`)
-        const existing = existingMap[p.productId]
-        batch.set(ref, {
-          uid,
-          productId: p.productId,
-          sku: p.sku,
-          name: p.name,
-          skuClass: classifySku(p.sku),
-          hasError: p.hasError,
-          failReason: p.failReason || '',
-          firstSeen: existing?.firstSeen || now,
-          lastUpdated: now,
-          uploadCount: (existing?.uploadCount || 0) + 1,
-          // 既存の編集データは保持
-          jan: existing?.jan || '',
-          origin: existing?.origin || 'Japan',
-          brand: existing?.brand || '',
-          category: existing?.category || '',
-          weight: existing?.weight || '',
-        }, { merge: true })
-      })
-      await batch.commit()
+      const now = serverTimestamp()
+      for (let i = 0; i < prods.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db)
+        const chunk = prods.slice(i, i + BATCH_SIZE)
+        chunk.forEach(p => {
+          const ref = doc(db, 'product_master', `${uid}_${p.productId}`)
+          const existing = existingMap[p.productId]
+          batch.set(ref, {
+            uid,
+            productId: p.productId,
+            sku: p.sku,
+            name: p.name,
+            skuClass: classifySku(p.sku),
+            hasError: p.hasError,
+            failReason: p.failReason || '',
+            firstSeen: existing?.firstSeen || now,
+            lastUpdated: now,
+            uploadCount: (existing?.uploadCount || 0) + 1,
+            jan: existing?.jan || '',
+            origin: existing?.origin || 'Japan',
+            brand: existing?.brand || '',
+            category: existing?.category || '',
+            weight: existing?.weight || '',
+          }, { merge: true })
+        })
+        await batch.commit()
+      }
     } catch(e) { console.error('DB保存エラー:', e) }
   }
 
-  // 差分計算（前回アップとの比較）
   function calcDiff(newProds, prevProds) {
     if (!prevProds || prevProds.length === 0) return null
     const prevMap = {}
     prevProds.forEach(p => { prevMap[p.productId] = p })
     const newMap = {}
     newProds.forEach(p => { newMap[p.productId] = p })
-
     const added = newProds.filter(p => !prevMap[p.productId])
     const removed = prevProds.filter(p => !newMap[p.productId])
     const prevErrors = new Set(prevProds.filter(p => p.hasError).map(p => p.productId))
     const newErrors = new Set(newProds.filter(p => p.hasError).map(p => p.productId))
     const newlyErrored = newProds.filter(p => p.hasError && !prevErrors.has(p.productId))
     const errorFixed = prevProds.filter(p => p.hasError && !newErrors.has(p.productId))
-
     return {
       added, removed, newlyErrored, errorFixed,
       totalDiff: newProds.length - prevProds.length,
@@ -196,28 +227,32 @@ export default function MassUpdatePage({ uid: propUid }) {
     }
   }
 
-  // editMap保存時に商品DBにも反映
   async function syncEditsToProductDB() {
     if (!uid || !products.length) return
     try {
-      const batch = writeBatch(db)
+      const BATCH_SIZE = 499
       const now = serverTimestamp()
-      Object.entries(editMap).forEach(([productId, e]) => {
-        const ref = doc(db, 'product_master', `${uid}_${productId}`)
-        const updates = {}
-        if (e.jan) updates.jan = e.jan
-        if (e.origin) updates.origin = e.origin
-        if (e.brand) updates.brand = e.brand
-        if (e.category) updates.category = e.category
-        if (e.weight) updates.weight = e.weight
-        if (e.price) updates.latestPrice = e.price
-        if (e.stock) updates.latestStock = e.stock
-        if (e.skuClass) updates.skuClass = e.skuClass
-        if (Object.keys(updates).length > 0) {
-          batch.set(ref, { ...updates, lastUpdated: now }, { merge: true })
-        }
-      })
-      await batch.commit()
+      const entries = Object.entries(editMap)
+      for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db)
+        const chunk = entries.slice(i, i + BATCH_SIZE)
+        chunk.forEach(([productId, e]) => {
+          const ref = doc(db, 'product_master', `${uid}_${productId}`)
+          const updates = {}
+          if (e.jan) updates.jan = e.jan
+          if (e.origin) updates.origin = e.origin
+          if (e.brand) updates.brand = e.brand
+          if (e.category) updates.category = e.category
+          if (e.weight) updates.weight = e.weight
+          if (e.price) updates.latestPrice = e.price
+          if (e.stock) updates.latestStock = e.stock
+          if (e.skuClass) updates.skuClass = e.skuClass
+          if (Object.keys(updates).length > 0) {
+            batch.set(ref, { ...updates, lastUpdated: now }, { merge: true })
+          }
+        })
+        await batch.commit()
+      }
       await loadProductDB()
     } catch(e) { console.error('DB同期エラー:', e) }
   }
@@ -255,7 +290,6 @@ export default function MassUpdatePage({ uid: propUid }) {
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rows = utils.sheet_to_json(ws, { header: 1 })
 
-      // テンプレート種別を自動検出（行2の1列目）
       const templateType = String(rows[1]?.[0] || '').toLowerCase()
       const TEMPLATE_LABELS = {
         'basic_info': 'Basic Info',
@@ -265,14 +299,12 @@ export default function MassUpdatePage({ uid: propUid }) {
         'dts_info': 'DTS Info（発送日数）',
         'media_info': 'Media Info（画像）',
       }
-      const detectedTemplate = TEMPLATE_LABELS[templateType] || templateType || '不明'
+      const detectedTemplateLabel = TEMPLATE_LABELS[templateType] || templateType || '不明'
 
-      // ヘッダー行を柔軟に検出（Product IDが含まれる行を探す）
       let headerIdx = rows.findIndex(r => Array.isArray(r) && r.some(c => String(c||'').trim() === 'Product ID'))
-      if (headerIdx < 0) headerIdx = 2 // フォールバック
+      if (headerIdx < 0) headerIdx = 2
       const headers = rows[headerIdx].map(h => String(h || '').trim())
 
-      // 列インデックスを名前で柔軟に取得
       function colIdx(names) {
         for (const name of names) {
           const i = headers.findIndex(h => h.toLowerCase() === name.toLowerCase())
@@ -285,17 +317,13 @@ export default function MassUpdatePage({ uid: propUid }) {
       const nameIdx = colIdx(['Product Name', 'ProductName', 'Name'])
       const descIdx = colIdx(['Product Description', 'Description'])
       const failIdx = colIdx(['Fail Reason', 'FailReason', 'Error', 'Reason'])
-      // sales_info専用
       const priceIdx  = colIdx(['Price', 'variation_price'])
       const stockIdx  = colIdx(['Stock', 'variation_stock'])
-      // shipping_info専用
       const weightIdx = colIdx(['Product Weight/kg', 'Weight', 'product_weight'])
-      // dts_info専用
       const dtsIdx    = colIdx(['Days to ship', 'Non Pre-order DTS'])
-      // republish専用
       const actionIdx = colIdx(['Action'])
 
-      if (pidIdx < 0) throw new Error(`Product ID列が見つかりません。\nテンプレート: ${detectedTemplate}\nヘッダー行: ${headers.slice(0,8).join(', ')}`)
+      if (pidIdx < 0) throw new Error(`Product ID列が見つかりません。\nテンプレート: ${detectedTemplateLabel}\nヘッダー行: ${headers.slice(0,8).join(', ')}`)
 
       const prods = rows.slice(headerIdx + 1)
         .filter(r => r[pidIdx] && String(r[pidIdx]).trim())
@@ -303,10 +331,9 @@ export default function MassUpdatePage({ uid: propUid }) {
           productId:   String(r[pidIdx] || ''),
           sku:         skuIdx >= 0  ? String(r[skuIdx]  || '') : '',
           name:        nameIdx >= 0 ? String(r[nameIdx] || '') : '',
-          description: descIdx >= 0 ? String(r[descIdx] || '').slice(0, 500) : '',
+          description: descIdx >= 0 ? String(r[descIdx] || '').slice(0, 200) : '',
           failReason:  failIdx >= 0 ? String(r[failIdx] || '') : '',
           hasError:    failIdx >= 0 ? !!(r[failIdx] && String(r[failIdx]).trim()) : false,
-          // テンプレート別の追加データ
           ...(priceIdx >= 0  && r[priceIdx]  ? { price:  String(r[priceIdx]) }  : {}),
           ...(stockIdx >= 0  && r[stockIdx]  ? { stock:  String(r[stockIdx]) }  : {}),
           ...(weightIdx >= 0 && r[weightIdx] ? { weight: String(r[weightIdx]) } : {}),
@@ -315,20 +342,59 @@ export default function MassUpdatePage({ uid: propUid }) {
           templateType,
         }))
       const errorCount = prods.filter(p => p.hasError).length
-      setDetectedTemplate(detectedTemplate)
-      // 差分計算（アップ前にhistoriesから前回データ取得）
-      const snap2 = await getDocs(collection(db, 'mass_updates'))
-      const prevList = snap2.docs.map(d=>({id:d.id,...d.data()})).filter(d=>d.uid===uid).sort((a,b)=>(b.uploadedAt?.seconds||0)-(a.uploadedAt?.seconds||0))
-      const prevProds = prevList.length > 0 ? (prevList[0].products || []) : []
+      setDetectedTemplate(detectedTemplateLabel)
+
+      // 差分計算：前回のmass_update_itemsから取得
+      const prevSnap = await getDocs(query(
+        collection(db, 'mass_updates'),
+      ))
+      const prevList = prevSnap.docs.map(d=>({id:d.id,...d.data()})).filter(d=>d.uid===uid).sort((a,b)=>(b.uploadedAt?.seconds||0)-(a.uploadedAt?.seconds||0))
+      let prevProds = []
+      if (prevList.length > 0) {
+        const prevItemsSnap = await getDocs(query(collection(db, 'mass_update_items'), where('historyId','==',prevList[0].id), where('uid','==',uid)))
+        prevProds = prevItemsSnap.docs.length > 0
+          ? prevItemsSnap.docs.map(d=>d.data())
+          : (prevList[0].products || [])
+      }
       const diffResult = calcDiff(prods, prevProds)
       setDiff(diffResult)
 
-      await addDoc(collection(db, 'mass_updates'), {
+      // メタ情報のみmass_updatesに保存（productsは含めない）
+      const histRef = await addDoc(collection(db, 'mass_updates'), {
         uid, filename: file.name,
         uploadedAt: serverTimestamp(),
-        totalCount: prods.length, errorCount, products: prods,
+        totalCount: prods.length,
+        errorCount,
+        templateType,
+        // 旧方式との互換性のため少量なら保持（500件以下のみ）
+        products: prods.length <= 500 ? prods : [],
       })
-      // 商品マスタDBへ自動upsert
+
+      // 新方式：1商品1ドキュメントで保存
+      const BATCH_SIZE = 499
+      for (let i = 0; i < prods.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db)
+        const chunk = prods.slice(i, i + BATCH_SIZE)
+        chunk.forEach(p => {
+          const ref = doc(db, 'mass_update_items', `${uid}_${histRef.id}_${p.productId}`)
+          batch.set(ref, {
+            uid,
+            historyId: histRef.id,
+            ...p,
+            skuClass: classifySku(p.sku),
+            jan: '',
+            origin: 'Japan',
+            weight: p.weight || '',
+            brand: '',
+            category: '',
+            price: p.price || '',
+            stock: p.stock || '',
+            savedAt: serverTimestamp(),
+          })
+        })
+        await batch.commit()
+      }
+
       await saveToProductDB(prods)
       await loadAll()
       setTab('upload')
@@ -417,7 +483,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
     setEditMap(prev => ({ ...prev, [productId]: { ...(prev[productId] || {}), [key]: val } }))
   }
 
-  // 一括SKU分類変更
   function applyBulkSkuClass() {
     if (selectedIds.size === 0) return alert('商品を選択してください')
     setEditMap(prev => {
@@ -429,7 +494,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
     setSelectedIds(new Set())
   }
 
-  // 一括フィールド編集
   function applyBulkField() {
     if (selectedIds.size === 0) return alert('商品を選択してください')
     if (!bulkValue.trim()) return alert('値を入力してください')
@@ -471,7 +535,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
   const totalPages = Math.ceil(filteredProducts.length / PAGE_SIZE)
   const pagedProducts = filteredProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  // 検索・フィルター変更時はページをリセット
   useEffect(() => { setPage(1) }, [filter, skuFilter, search])
 
   const TABS = [
@@ -494,7 +557,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
 
       <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }}>
 
-        {/* ===== アップロードタブ ===== */}
         {tab === 'upload' && (
           <div className="fade-up">
             <div style={{ fontSize: '0.7rem', color: 'var(--dim2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1rem' }}>📤 Mass Update XLSXをアップロード</div>
@@ -511,7 +573,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
                 <span style={{ fontSize:'0.78rem', fontWeight:700, color:'var(--text)' }}>{detectedTemplate}</span>
               </div>
             )}
-
             {histories.length > 0 && (
               <div className="card" style={{ padding: '1.25rem' }}>
                 <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--dim2)', textTransform: 'uppercase', marginBottom: '0.75rem' }}>📊 最新アップロード状況</div>
@@ -530,8 +591,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
                 </div>
               </div>
             )}
-
-            {/* 差分レポート */}
             {diff && (
               <div className="card" style={{ padding: '1.25rem', marginTop: '1.25rem', border: '1px solid rgba(255,107,43,0.2)' }}>
                 <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--orange)', textTransform: 'uppercase', marginBottom: '1rem', letterSpacing: '0.1em' }}>📊 前回との差分レポート</div>
@@ -602,26 +661,20 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
           </div>
         )}
 
-        {/* ===== 商品一覧・編集タブ ===== */}
         {tab === 'products' && (
           <div className="fade-up">
-
-            {/* 保存バー */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', padding: '0.75rem 1rem', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--rim)' }}>
               <div style={{ fontSize: '0.72rem', color: 'var(--dim2)' }}>
-                {lastSaved ? `💾 最終保存: ${lastSaved.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}` : '⚠️ 未保存（ページを閉じると消えます）'}
+                {itemsLoading ? '⏳ 読み込み中...' : lastSaved ? `💾 最終保存: ${lastSaved.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}` : '⚠️ 未保存（ページを閉じると消えます）'}
               </div>
-              <button onClick={saveEdits} disabled={saving} style={{ padding: '0.4rem 1rem', borderRadius: 8, border: 'none', background: saving ? 'var(--dim)' : 'var(--orange)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}>
+              <button onClick={saveEdits} disabled={saving || itemsLoading} style={{ padding: '0.4rem 1rem', borderRadius: 8, border: 'none', background: saving ? 'var(--dim)' : 'var(--orange)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}>
                 {saving ? '保存中...' : '💾 Firestoreに保存'}
               </button>
             </div>
-
-            {/* 一括編集パネル */}
             {bulkMode && (
               <div style={{ padding: '1rem', background: 'rgba(255,107,43,0.05)', border: '1px solid rgba(255,107,43,0.2)', borderRadius: 10, marginBottom: '1rem' }}>
                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--orange)', marginBottom: '0.75rem' }}>✏️ 一括編集モード　{selectedIds.size > 0 && <span style={{ color: 'var(--text)' }}>（{selectedIds.size}件選択中）</span>}</div>
                 <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                  {/* SKU分類一括変更 */}
                   <div>
                     <div style={{ fontSize: '0.6rem', color: 'var(--dim2)', marginBottom: '0.25rem' }}>SKU分類を変更</div>
                     <div style={{ display: 'flex', gap: '0.4rem' }}>
@@ -631,7 +684,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
                       <button onClick={applyBulkSkuClass} style={{ padding: '0.3rem 0.75rem', borderRadius: 6, border: 'none', background: 'var(--orange)', color: '#fff', fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer' }}>適用</button>
                     </div>
                   </div>
-                  {/* フィールド一括変更 */}
                   <div>
                     <div style={{ fontSize: '0.6rem', color: 'var(--dim2)', marginBottom: '0.25rem' }}>フィールドを一括変更</div>
                     <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
@@ -650,8 +702,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
                 </div>
               </div>
             )}
-
-            {/* フィルターバー */}
             <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="商品名・SKUで検索..." style={{ flex: 1, minWidth: 180, padding: '0.5rem 0.75rem', borderRadius: 8, border: '1px solid var(--rim)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.8rem' }} />
               {['all', 'ok', 'error'].map(f => (
@@ -670,8 +720,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
               <button onClick={downloadXlsx} style={{ padding: '0.4rem 0.9rem', borderRadius: 8, border: 'none', background: 'var(--orange)', color: '#fff', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700 }}>⬇ XLSX</button>
               <span style={{ fontSize: '0.72rem', color: 'var(--dim2)' }}>{filteredProducts.length}件</span>
             </div>
-
-            {/* 一括編集時の全選択 */}
             {bulkMode && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', padding: '0.4rem 0.75rem', background: 'var(--surface)', borderRadius: 8 }}>
                 <input type="checkbox" checked={selectedIds.size === pagedProducts.length && pagedProducts.length > 0} onChange={selectAll} style={{ cursor: 'pointer', width: 16, height: 16 }} />
@@ -679,58 +727,58 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
                 {selectedIds.size > 0 && <span style={{ fontSize: '0.72rem', color: 'var(--orange)', fontWeight: 700 }}>{selectedIds.size}件選択中</span>}
               </div>
             )}
-
-            {/* 商品リスト */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {pagedProducts.map((p, i) => {
-                const e = editMap[p.productId] || {}
-                const sc = e.skuClass || classifySku(p.sku)
-                const cls = SKU_CLASS[sc]
-                const isSelected = selectedIds.has(p.productId)
-                return (
-                  <div key={i} className="card" style={{ padding: '0.85rem 1rem', borderLeft: '3px solid ' + (p.hasError ? 'var(--red)' : cls.color), background: isSelected ? 'rgba(255,107,43,0.04)' : undefined }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                      {bulkMode && (
-                        <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(p.productId)} style={{ cursor: 'pointer', width: 16, height: 16, marginTop: 2, flexShrink: 0 }} />
-                      )}
-                      <span style={{ fontSize: '0.65rem', padding: '0.15rem 0.5rem', borderRadius: 4, background: cls.bg, color: cls.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{cls.label}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '0.78rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                        <div style={{ fontSize: '0.63rem', color: 'var(--dim2)' }}>ID: {p.productId}　SKU: {p.sku}</div>
-                        {p.hasError && <div style={{ fontSize: '0.65rem', color: 'var(--red)', fontWeight: 700 }}>⚠ {p.failReason}</div>}
-                        {e.aiFixSuggestion && <div style={{ fontSize: '0.63rem', color: 'var(--ai)', marginTop: '0.2rem' }}>💡 {e.aiFixSuggestion}</div>}
-                      </div>
-                      <select value={e.skuClass || sc} onChange={ev => setEdit(p.productId, 'skuClass', ev.target.value)} style={{ fontSize: '0.68rem', background: 'var(--surface)', border: '1px solid var(--rim)', color: 'var(--text)', borderRadius: 6, padding: '0.2rem' }}>
-                        <option value="instock">有在庫</option>
-                        <option value="nostock">無在庫</option>
-                        <option value="pasabuy">Pasabuy</option>
-                      </select>
-                      <button onClick={() => aiCompleteSingle(p.productId, p.name, p.sku, p.failReason)} disabled={aiLoading[p.productId]} style={{ padding: '0.25rem 0.6rem', borderRadius: 6, border: '1px solid var(--ai)', background: aiLoading[p.productId] ? 'rgba(139,92,246,0.05)' : 'rgba(139,92,246,0.1)', color: 'var(--ai)', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                        {aiLoading[p.productId] ? '⏳' : '🤖'}
-                      </button>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: '0.5rem' }}>
-                      {[
-                        { key: 'jan', label: 'JANコード' },
-                        { key: 'origin', label: '原産国' },
-                        { key: 'weight', label: '重量(g)' },
-                        { key: 'brand', label: 'ブランド' },
-                        { key: 'category', label: 'カテゴリ' },
-                        { key: 'price', label: '価格(₱)' },
-                        { key: 'stock', label: '在庫数' },
-                      ].map(field => (
-                        <div key={field.key}>
-                          <div style={{ fontSize: '0.58rem', color: 'var(--dim2)', fontWeight: 700, marginBottom: '0.15rem' }}>{field.label}</div>
-                          <input value={e[field.key] || ''} onChange={ev => setEdit(p.productId, field.key, ev.target.value)} style={inputStyle} placeholder="-" />
+            {itemsLoading ? (
+              <div style={{ textAlign:'center', padding:'3rem', color:'var(--dim2)' }}>⏳ 商品データ読み込み中...</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {pagedProducts.map((p, i) => {
+                  const e = editMap[p.productId] || {}
+                  const sc = e.skuClass || classifySku(p.sku)
+                  const cls = SKU_CLASS[sc]
+                  const isSelected = selectedIds.has(p.productId)
+                  return (
+                    <div key={i} className="card" style={{ padding: '0.85rem 1rem', borderLeft: '3px solid ' + (p.hasError ? 'var(--red)' : cls.color), background: isSelected ? 'rgba(255,107,43,0.04)' : undefined }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                        {bulkMode && (
+                          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(p.productId)} style={{ cursor: 'pointer', width: 16, height: 16, marginTop: 2, flexShrink: 0 }} />
+                        )}
+                        <span style={{ fontSize: '0.65rem', padding: '0.15rem 0.5rem', borderRadius: 4, background: cls.bg, color: cls.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{cls.label}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.78rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                          <div style={{ fontSize: '0.63rem', color: 'var(--dim2)' }}>ID: {p.productId}　SKU: {p.sku}</div>
+                          {p.hasError && <div style={{ fontSize: '0.65rem', color: 'var(--red)', fontWeight: 700 }}>⚠ {p.failReason}</div>}
+                          {e.aiFixSuggestion && <div style={{ fontSize: '0.63rem', color: 'var(--ai)', marginTop: '0.2rem' }}>💡 {e.aiFixSuggestion}</div>}
                         </div>
-                      ))}
+                        <select value={e.skuClass || sc} onChange={ev => setEdit(p.productId, 'skuClass', ev.target.value)} style={{ fontSize: '0.68rem', background: 'var(--surface)', border: '1px solid var(--rim)', color: 'var(--text)', borderRadius: 6, padding: '0.2rem' }}>
+                          <option value="instock">有在庫</option>
+                          <option value="nostock">無在庫</option>
+                          <option value="pasabuy">Pasabuy</option>
+                        </select>
+                        <button onClick={() => aiCompleteSingle(p.productId, p.name, p.sku, p.failReason)} disabled={aiLoading[p.productId]} style={{ padding: '0.25rem 0.6rem', borderRadius: 6, border: '1px solid var(--ai)', background: aiLoading[p.productId] ? 'rgba(139,92,246,0.05)' : 'rgba(139,92,246,0.1)', color: 'var(--ai)', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          {aiLoading[p.productId] ? '⏳' : '🤖'}
+                        </button>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: '0.5rem' }}>
+                        {[
+                          { key: 'jan', label: 'JANコード' },
+                          { key: 'origin', label: '原産国' },
+                          { key: 'weight', label: '重量(g)' },
+                          { key: 'brand', label: 'ブランド' },
+                          { key: 'category', label: 'カテゴリ' },
+                          { key: 'price', label: '価格(₱)' },
+                          { key: 'stock', label: '在庫数' },
+                        ].map(field => (
+                          <div key={field.key}>
+                            <div style={{ fontSize: '0.58rem', color: 'var(--dim2)', fontWeight: 700, marginBottom: '0.15rem' }}>{field.label}</div>
+                            <input value={e[field.key] || ''} onChange={ev => setEdit(p.productId, field.key, ev.target.value)} style={inputStyle} placeholder="-" />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* ページネーション */}
+                  )
+                })}
+              </div>
+            )}
             {totalPages > 1 && (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', marginTop: '1.25rem', flexWrap: 'wrap' }}>
                 <button onClick={() => setPage(1)} disabled={page === 1} style={{ padding: '0.35rem 0.7rem', borderRadius: 6, border: '1px solid var(--rim)', background: 'transparent', color: page === 1 ? 'var(--dim)' : 'var(--text)', cursor: page === 1 ? 'default' : 'pointer', fontSize: '0.72rem' }}>«</button>
@@ -753,7 +801,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
           </div>
         )}
 
-        {/* ===== エラー管理タブ ===== */}
         {tab === 'errors' && (
           <div className="fade-up">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -789,10 +836,8 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
           </div>
         )}
 
-        {/* ===== 商品DBタブ ===== */}
         {tab === 'db' && (
           <div className="fade-up">
-            {/* ヘッダー */}
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
               <div>
                 <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em' }}>🗄️ 商品マスタDB</div>
@@ -803,8 +848,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
                 <button onClick={loadProductDB} style={{ padding:'0.35rem 0.75rem', borderRadius:8, border:'1px solid var(--rim)', background:'transparent', color:'var(--dim2)', cursor:'pointer', fontSize:'0.72rem' }}>🔄 更新</button>
               </div>
             </div>
-
-            {/* サマリーカード */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))', gap:'0.75rem', marginBottom:'1.25rem' }}>
               {[
                 { l:'総商品数', v:dbProducts.length+'件', c:'var(--orange)' },
@@ -819,8 +862,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
                 </div>
               ))}
             </div>
-
-            {/* 検索・フィルター */}
             <div style={{ display:'flex', gap:'0.75rem', marginBottom:'1rem', flexWrap:'wrap', alignItems:'center' }}>
               <input value={dbSearch} onChange={e=>{setDbSearch(e.target.value);setDbPage(1)}} placeholder="商品名・SKU・ブランドで検索..." style={{ flex:1, minWidth:180, padding:'0.5rem 0.75rem', borderRadius:8, border:'1px solid var(--rim)', background:'var(--surface)', color:'var(--text)', fontSize:'0.8rem' }} />
               {['all','instock','nostock','pasabuy'].map(f=>(
@@ -829,8 +870,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
                 </button>
               ))}
             </div>
-
-            {/* 商品リスト */}
             {dbLoading ? (
               <div style={{ textAlign:'center', padding:'3rem', color:'var(--dim2)' }}>読み込み中...</div>
             ) : (() => {
@@ -901,7 +940,6 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
           </div>
         )}
 
-        {/* ===== 履歴タブ ===== */}}
         {tab === 'history' && (
           <div className="fade-up">
             <div style={{ fontSize: '0.7rem', color: 'var(--dim2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1rem' }}>📅 アップロード履歴</div>
@@ -910,13 +948,13 @@ ${failReason ? 'Fail Reason: ' + failReason : ''}
                 const d = h.uploadedAt?.toDate ? h.uploadedAt.toDate() : new Date((h.uploadedAt?.seconds || 0) * 1000)
                 return (
                   <div key={h.id} className="card" style={{ padding: '1rem', cursor: 'pointer', borderLeft: '3px solid ' + (h.errorCount > 0 ? 'var(--red)' : 'var(--green)'), opacity: currentHistoryId === h.id ? 1 : 0.8 }}
-                    onClick={async () => { await loadHistoryWithEdits(h); setTab('products') }}>
+                    onClick={async () => { await loadHistoryItems(h); setTab('products') }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                       <div>
                         <div style={{ fontSize: '0.78rem', fontWeight: 700 }}>{h.filename} {currentHistoryId === h.id && <span style={{ fontSize: '0.65rem', color: 'var(--orange)', marginLeft: '0.5rem' }}>▶ 表示中</span>}</div>
                         <div style={{ display:'flex', gap:'0.5rem', alignItems:'center', marginTop:'0.2rem' }}>
                           <span style={{ fontSize: '0.65rem', color: 'var(--dim2)' }}>{d.toLocaleDateString('ja-JP')} {d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>
-                          {h.products?.[0]?.templateType && <span style={{ fontSize:'0.62rem', padding:'0.1rem 0.4rem', borderRadius:4, background:'rgba(139,92,246,0.1)', color:'var(--ai)', fontWeight:700 }}>{h.products[0].templateType}</span>}
+                          {h.templateType && <span style={{ fontSize:'0.62rem', padding:'0.1rem 0.4rem', borderRadius:4, background:'rgba(139,92,246,0.1)', color:'var(--ai)', fontWeight:700 }}>{h.templateType}</span>}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
