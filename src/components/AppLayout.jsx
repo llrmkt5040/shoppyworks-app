@@ -14,6 +14,7 @@ import MassUpdatePage from "../pages/MassUpdatePage"
 import AccountHealthPage from "../pages/AccountHealthPage"
 import TaskChecklist, { useUncompletedCount } from "./TaskChecklist"
 import SettingsPage, { STAFF_PAGES, DEFAULT_STAFF_PERMS } from "../pages/SettingsPage"
+import CockpitPage, { useIsInstructor } from "../pages/CockpitPage"
 
 const NAV = [
   { id: "dashboard",     icon: "📈", label: "Dashboard",            sub: "数値管理",   section: null },
@@ -30,6 +31,7 @@ const NAV = [
   { id: "massupdate",    icon: "🔄", label: "MassUpdate管理",          sub: "出品管理"   },
   { id: "accounthealth", icon: "🏥", label: "アカウントヘルス",        sub: "健全性管理" },
   { id: "settings",      icon: "⚙️", label: "設定",                    sub: ""           },
+  { id: "cockpit",       icon: "🎓", label: "講師コクピット",           sub: "受講生管理",  instructor: true },
 ]
 
 // スタッフが操作するページで、閲覧モード時に上部に表示するバナー
@@ -160,6 +162,7 @@ export default function AppLayout() {
         case "massupdate":    return <MassUpdatePage uid={uid} viewOnly={viewOnly} />
         case "accounthealth": return <AccountHealthPage uid={uid} viewOnly={viewOnly} />
         case "settings":      return <SettingsPage uid={uid} profile={profile} />
+        case "cockpit":       return <CockpitPage />
         default:              return <DashboardPage uid={uid} viewOnly={viewOnly} />
       }
     }

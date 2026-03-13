@@ -49,6 +49,10 @@ export function AuthProvider({ children }) {
         } else {
           profileData = userSnap.data()
         }
+        // allowed_emailsにuidを保存（コクピット用）
+        if (!allowSnap.data().uid) {
+          await setDoc(allowRef, { uid: fbUser.uid }, { merge: true })
+        }
         setUser(fbUser); setProfile(profileData); setError(null)
       } catch (err) { setError('認証エラー: ' + err.message) }
       setLoading(false)
