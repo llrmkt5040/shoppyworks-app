@@ -21,6 +21,19 @@ function Toast({ msg, type }) {
   )
 }
 
+function DiffBadge({ current, prev, field, suffix='%', decimals=2 }) {
+  if (prev == null || current == null) return null
+  const diff = current - prev
+  if (Math.abs(diff) < 0.01) return <span style={{ fontSize:'0.62rem', color:'var(--dim)', marginLeft:4 }}>±0</span>
+  const up = diff > 0
+  const color = field === 'bounce' ? (up ? 'var(--red)' : 'var(--green)') : (up ? 'var(--green)' : 'var(--red)')
+  return (
+    <span style={{ fontSize:'0.62rem', color, marginLeft:4, fontWeight:700 }}>
+      {up ? '▲' : '▼'}{Math.abs(diff).toFixed(decimals)}{suffix}
+    </span>
+  )
+}
+
 export default function AnalyzerPage({ uid: propUid, onNavigate }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -33,12 +46,16 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
   const [flagFilter, setFlagFilter] = useState('all')
   const [urgentCount, setUrgentCount] = useState(null)
   const [histLoading, setHistLoading] = useState(true)
+  const [compareTarget, setCompareTarget] = useState(null)
+  const [diffMap, setDiffMap] = useState({})
 
   const [sortKey, setSortKey] = useState('priorityScore')
   const [sortDir, setSortDir] = useState('desc')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [minImpressions, setMinImpressions] = useState(0)
   const [minSales, setMinSales] = useState(0)
+  const [diffSortKey, setDiffSortKey] = useState('ctrDiff')
+  const [diffSortDir, setDiffSortDir] = useState('desc')
 
   const dropRef = useRef()
 
@@ -100,7 +117,38 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
     if (!h.products?.length) { showToast('商品データがありません', 'error'); return }
     setData({ filename: h.filename, products: h.products, kpis: h.kpis })
     setTab('products')
+    setCompareTarget(null)
+    setDiffMap({})
     showToast('履歴を復元しました', 'success')
+  }
+
+  function buildDiff(currentProducts, prevProducts) {
+    const prevMap = {}
+    prevProducts.forEach(p => { prevMap[p.name] = p })
+    const map = {}
+    currentProducts.forEach(p => {
+      const prev = prevMap[p.name]
+      if (!prev) return
+      map[p.name] = {
+        ctrDiff: (p.ctr || 0) - (prev.ctr || 0),
+        cvrDiff: (p.cvr || 0) - (prev.cvr || 0),
+        salesDiff: (p.sales || 0) - (prev.sales || 0),
+        bounceDiff: (p.bounce || 0) - (prev.bounce || 0),
+        prevCtr: prev.ctr || 0,
+        prevCvr: prev.cvr || 0,
+        prevSales: prev.sales || 0,
+        prevBounce: prev.bounce || 0,
+      }
+    })
+    return map
+  }
+
+  function applyCompare(currentHistory, prevHistory) {
+    if (!currentHistory?.products || !prevHistory?.products) return
+    const map = buildDiff(currentHistory.products, prevHistory.products)
+    setDiffMap(map)
+    setCompareTarget(prevHistory)
+    showToast(`📊 ${prevHistory.filename} と比較中`, 'success')
   }
 
   async function deleteHistory(id) {
@@ -165,6 +213,11 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
     else { setSortKey(key); setSortDir('desc') }
   }
 
+  function handleDiffSort(key) {
+    if (diffSortKey === key) setDiffSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    else { setDiffSortKey(key); setDiffSortDir('desc') }
+  }
+
   const filteredProducts = data ? data.products
     .filter(p => flagFilter === 'all' || productFlags[p.name] === flagFilter)
     .filter(p => categoryFilter === 'all' || p.category === categoryFilter)
@@ -174,6 +227,19 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
       const av = a[sortKey] ?? 0, bv = b[sortKey] ?? 0
       return sortDir === 'desc' ? bv - av : av - bv
     }) : []
+
+  const diffProducts = data ? data.products
+    .filter(p => diffMap[p.name] != null)
+    .map(p => ({ ...p, ...diffMap[p.name] }))
+    .sort((a, b) => {
+      const av = a[diffSortKey] ?? 0, bv = b[diffSortKey] ?? 0
+      return diffSortDir === 'desc' ? bv - av : av - bv
+    }) : []
+
+  const improvedCtr = [...diffProducts].sort((a,b) => b.ctrDiff - a.ctrDiff).slice(0, 5)
+  const worsenedCtr = [...diffProducts].sort((a,b) => a.ctrDiff - b.ctrDiff).slice(0, 5)
+  const improvedCvr = [...diffProducts].sort((a,b) => b.cvrDiff - a.cvrDiff).slice(0, 5)
+  const worsenedCvr = [...diffProducts].sort((a,b) => a.cvrDiff - b.cvrDiff).slice(0, 5)
 
   const maxSales = data ? Math.max(...data.products.map(p => p.sales), 1) : 1
   const sorted = data ? [...data.products].sort((a,b) => b.priorityScore - a.priorityScore) : []
@@ -189,12 +255,19 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
   const latestDateStr = latestHistory ? new Date(latestHistory.uploadedAt.seconds * 1000).toISOString().slice(0, 10) : null
   const todayUploaded = latestDateStr === todayStr
 
-  // アップロード前のトップ画面
+  const hasDiff = Object.keys(diffMap).length > 0
+
+  const tabs = [
+    ['overview','📊 概要'],
+    ['products','🔍 商品詳細'],
+    ...(hasDiff ? [['diff','📈 差分分析']] : []),
+    ['roadmap','📅 ロードマップ'],
+    ['ai','🤖 AI提案'],
+  ]
+
   if (!data && !loading) return (
     <div style={{ maxWidth:900, margin:'0 auto', padding:'1.5rem' }}>
       <Toast msg={toast.msg} type={toast.type} />
-
-      {/* コクピットヘッダー */}
       <div style={{ display:'flex', alignItems:'center', gap:'1rem', marginBottom:'1.5rem', flexWrap:'wrap' }}>
         <div>
           <h2 style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.8rem', letterSpacing:'0.04em', margin:0 }}>ShopeeAnalyzer</h2>
@@ -202,7 +275,6 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
         </div>
       </div>
 
-      {/* アップロード履歴 */}
       {histories.length > 0 && (
         <div className="card" style={{ padding:'1.1rem', marginBottom:'1.5rem' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'0.75rem' }}>
@@ -212,7 +284,7 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:'0.4rem' }}>
             {histories.map((h, i) => (
-              <div key={h.id} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap:'0.75rem', alignItems:'center', padding:'0.5rem 0.6rem', background:'rgba(255,255,255,0.02)', borderRadius:8, border:'1px solid var(--rim)' }}>
+              <div key={h.id} style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto auto', gap:'0.75rem', alignItems:'center', padding:'0.5rem 0.6rem', background:'rgba(255,255,255,0.02)', borderRadius:8, border:'1px solid var(--rim)' }}>
                 <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'1.2rem', color:'var(--orange)', minWidth:'1.5rem', textAlign:'center', lineHeight:1 }}>{i+1}</div>
                 <div>
                   <div style={{ fontSize:'0.75rem', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:'0.15rem' }}>{h.filename}</div>
@@ -231,7 +303,6 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
         </div>
       )}
 
-      {/* ドロップエリア */}
       <div ref={dropRef} onClick={() => document.getElementById('xlsx-input').click()}
         onDragOver={e => { e.preventDefault(); dropRef.current.style.borderColor='var(--orange)' }}
         onDragLeave={() => dropRef.current.style.borderColor='rgba(255,107,43,0.3)'}
@@ -261,20 +332,48 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
           <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontFamily:"'DM Mono',monospace" }}>
             {data.products.length}商品 · 分析完了
             {saving && <span style={{ marginLeft:'0.5rem', color:'var(--orange)' }}>💾 保存中...</span>}
+            {compareTarget && <span style={{ marginLeft:'0.75rem', fontSize:'0.68rem', color:'var(--ai)', fontWeight:700 }}>📊 比較中: {compareTarget.filename}</span>}
           </div>
         </div>
-        <button className="btn-ghost" style={{ marginLeft:'auto', fontSize:'0.75rem' }} onClick={() => { setData(null); setTab('overview') }}>← 戻る</button>
+        <div style={{ marginLeft:'auto', display:'flex', gap:'0.5rem', alignItems:'center', flexWrap:'wrap' }}>
+          {histories.length > 1 && !compareTarget && (
+            <select onChange={e => {
+              const h = histories.find(x => x.id === e.target.value)
+              if (h) {
+                const current = { products: data.products }
+                applyCompare(current, h)
+              }
+            }} defaultValue="" style={{ padding:'0.28rem 0.6rem', borderRadius:8, border:'1px solid var(--rim)', background:'var(--card)', color:'var(--text)', fontSize:'0.68rem', cursor:'pointer', fontFamily:"'Zen Kaku Gothic New',sans-serif" }}>
+              <option value="" disabled>📊 過去データと比較...</option>
+              {histories.map(h => (
+                <option key={h.id} value={h.id}>{h.filename} ({formatDate(h.uploadedAt)})</option>
+              ))}
+            </select>
+          )}
+          {compareTarget && (
+            <button onClick={() => { setCompareTarget(null); setDiffMap({}) }} style={{ padding:'0.28rem 0.6rem', borderRadius:8, border:'1px solid rgba(0,212,170,0.3)', background:'rgba(0,212,170,0.08)', color:'var(--ai)', fontSize:'0.68rem', cursor:'pointer', fontWeight:700 }}>✕ 比較解除</button>
+          )}
+          <button className="btn-ghost" style={{ fontSize:'0.75rem' }} onClick={() => { setData(null); setTab('overview'); setCompareTarget(null); setDiffMap({}) }}>← 戻る</button>
+        </div>
       </div>
       <div style={{ background:'var(--surface)', borderBottom:'1px solid var(--rim)', display:'flex', overflowX:'auto', flexShrink:0 }}>
-        {[['overview','📊 概要'],['products','🔍 商品詳細'],['roadmap','📅 ロードマップ'],['ai','🤖 AI提案']].map(([id,label]) => (
+        {tabs.map(([id,label]) => (
           <div key={id} onClick={() => setTab(id)} style={{ padding:'0.85rem 1.2rem', cursor:'pointer', fontSize:'0.8rem', fontWeight:700, color:tab===id?'var(--orange)':'var(--dim2)', borderBottom:tab===id?'2px solid var(--orange)':'2px solid transparent', whiteSpace:'nowrap', transition:'all 0.2s' }}>{label}</div>
         ))}
       </div>
       <div style={{ flex:1, overflow:'auto' }}>
+
         {tab==='overview' && (
           <div className="fade-up" style={{ maxWidth:1200, margin:'0 auto', padding:'1.5rem' }}>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:'1rem', marginBottom:'1.5rem' }}>
-              {[{l:'総売上',v:'₱'+data.kpis.totalSales?.toLocaleString('en',{maximumFractionDigits:0}),a:'var(--orange)'},{l:'商品数',v:data.kpis.productCount+'件',a:'var(--purple)'},{l:'平均CTR',v:data.kpis.avgCtr?.toFixed(2)+'%',a:data.kpis.avgCtr>3?'var(--green)':'var(--yellow)'},{l:'平均CVR',v:data.kpis.avgCvr?.toFixed(2)+'%',a:data.kpis.avgCvr>5?'var(--green)':data.kpis.avgCvr<3?'var(--red)':'var(--yellow)'},{l:'バウンス率',v:data.kpis.avgBounce?.toFixed(1)+'%',a:data.kpis.avgBounce<30?'var(--green)':'var(--yellow)'},{l:'緊急改善',v:data.kpis.urgentCount+'件',a:data.kpis.urgentCount>0?'var(--red)':'var(--green)'}].map(k => (
+              {[
+                {l:'総売上',v:'₱'+data.kpis.totalSales?.toLocaleString('en',{maximumFractionDigits:0}),a:'var(--orange)'},
+                {l:'商品数',v:data.kpis.productCount+'件',a:'var(--purple)'},
+                {l:'平均CTR',v:data.kpis.avgCtr?.toFixed(2)+'%',a:data.kpis.avgCtr>3?'var(--green)':'var(--yellow)'},
+                {l:'平均CVR',v:data.kpis.avgCvr?.toFixed(2)+'%',a:data.kpis.avgCvr>5?'var(--green)':data.kpis.avgCvr<3?'var(--red)':'var(--yellow)'},
+                {l:'バウンス率',v:data.kpis.avgBounce?.toFixed(1)+'%',a:data.kpis.avgBounce<30?'var(--green)':'var(--yellow)'},
+                {l:'緊急改善',v:data.kpis.urgentCount+'件',a:data.kpis.urgentCount>0?'var(--red)':'var(--green)'},
+              ].map(k => (
                 <div key={k.l} className="card" style={{ padding:'1.25rem', borderTop:'2px solid '+k.a }}>
                   <div style={{ fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--dim2)', fontWeight:700, marginBottom:'0.5rem' }}>{k.l}</div>
                   <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:'2rem', color:k.a, lineHeight:1 }}>{k.v}</div>
@@ -303,6 +402,7 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
             </div>
           </div>
         )}
+
         {tab==='products' && (
           <div className="fade-up" style={{ display:'flex', flexDirection:'column', height:'100%' }}>
             <div style={{ padding:'0.75rem 1.5rem', borderBottom:'1px solid var(--rim)', background:'var(--surface)', display:'flex', gap:'0.75rem', flexWrap:'wrap', alignItems:'center', flexShrink:0 }}>
@@ -347,40 +447,153 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredProducts.map((p, i) => (
-                    <tr key={i} style={{ borderBottom:'1px solid var(--rim)', transition:'background 0.1s' }} onMouseEnter={e => e.currentTarget.style.background='rgba(255,107,43,0.04)'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                      <td style={{ padding:'0.55rem 0.5rem', color:'var(--dim)', fontSize:'0.7rem', fontFamily:"'DM Mono',monospace" }}>{i+1}</td>
-                      <td style={{ padding:'0.55rem 0.5rem', maxWidth:300 }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:'0.35rem' }}>
-                          <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:'0.78rem', fontWeight:600, flex:1 }} title={p.name}>{p.name}</div>
-                          {productFlags[p.name] && (
-                            <span style={{ fontSize:'0.8rem', flexShrink:0 }}>{FLAGS[productFlags[p.name]]?.emoji}</span>
-                          )}
-                          <div style={{ display:'flex', gap:'0.15rem', flexShrink:0 }}>
-                            {Object.entries(FLAGS).map(([k,f]) => (
-                              <button key={k} onClick={() => setFlag(p.name, k)} title={f.label} style={{ width:20, height:20, borderRadius:4, border:'1px solid', borderColor:productFlags[p.name]===k?f.color:'transparent', background:productFlags[p.name]===k?f.color+'33':'rgba(255,255,255,0.05)', cursor:'pointer', fontSize:'0.65rem', display:'flex', alignItems:'center', justifyContent:'center', padding:0, transition:'all 0.15s' }}>
-                                {f.emoji}
-                              </button>
-                            ))}
+                  {filteredProducts.map((p, i) => {
+                    const d = diffMap[p.name]
+                    return (
+                      <tr key={i} style={{ borderBottom:'1px solid var(--rim)', transition:'background 0.1s' }} onMouseEnter={e => e.currentTarget.style.background='rgba(255,107,43,0.04)'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                        <td style={{ padding:'0.55rem 0.5rem', color:'var(--dim)', fontSize:'0.7rem', fontFamily:"'DM Mono',monospace" }}>{i+1}</td>
+                        <td style={{ padding:'0.55rem 0.5rem', maxWidth:300 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:'0.35rem' }}>
+                            <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:'0.78rem', fontWeight:600, flex:1 }} title={p.name}>{p.name}</div>
+                            {productFlags[p.name] && <span style={{ fontSize:'0.8rem', flexShrink:0 }}>{FLAGS[productFlags[p.name]]?.emoji}</span>}
+                            <div style={{ display:'flex', gap:'0.15rem', flexShrink:0 }}>
+                              {Object.entries(FLAGS).map(([k,f]) => (
+                                <button key={k} onClick={() => setFlag(p.name, k)} title={f.label} style={{ width:20, height:20, borderRadius:4, border:'1px solid', borderColor:productFlags[p.name]===k?f.color:'transparent', background:productFlags[p.name]===k?f.color+'33':'rgba(255,255,255,0.05)', cursor:'pointer', fontSize:'0.65rem', display:'flex', alignItems:'center', justifyContent:'center', padding:0, transition:'all 0.15s' }}>
+                                  {f.emoji}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', color:'var(--orange)', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem' }}>₱{(p.sales||0).toLocaleString('en',{maximumFractionDigits:0})}</td>
-                      <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:'var(--dim2)' }}>{(p.impressions||0).toLocaleString()}</td>
-                      <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:'var(--dim2)' }}>{(p.orders||0).toLocaleString()}</td>
-                      <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:p.ctr>3?'var(--green)':'var(--yellow)' }}>{(p.ctr||0).toFixed(2)}%</td>
-                      <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:p.cvr>5?'var(--green)':p.cvr<3?'var(--red)':'var(--yellow)' }}>{(p.cvr||0).toFixed(2)}%</td>
-                      <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:p.bounce<30?'var(--green)':p.bounce>60?'var(--red)':'var(--yellow)' }}>{(p.bounce||0).toFixed(1)}%</td>
-                      <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:'var(--orange)', fontWeight:700 }}>{Math.round(p.priorityScore||0)}</td>
-                      <td style={{ padding:'0.55rem 0.5rem', textAlign:'center' }}><span className={'pb pb-'+p.category}>{CATEGORY_LABELS[p.category]}</span></td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', color:'var(--orange)', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem' }}>
+                          ₱{(p.sales||0).toLocaleString('en',{maximumFractionDigits:0})}
+                          {d && <DiffBadge current={p.sales} prev={d.prevSales} field="sales" suffix="" decimals={0} />}
+                        </td>
+                        <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:'var(--dim2)' }}>{(p.impressions||0).toLocaleString()}</td>
+                        <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:'var(--dim2)' }}>{(p.orders||0).toLocaleString()}</td>
+                        <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:p.ctr>3?'var(--green)':'var(--yellow)' }}>
+                          {(p.ctr||0).toFixed(2)}%
+                          {d && <DiffBadge current={p.ctr} prev={d.prevCtr} field="ctr" />}
+                        </td>
+                        <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:p.cvr>5?'var(--green)':p.cvr<3?'var(--red)':'var(--yellow)' }}>
+                          {(p.cvr||0).toFixed(2)}%
+                          {d && <DiffBadge current={p.cvr} prev={d.prevCvr} field="cvr" />}
+                        </td>
+                        <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:p.bounce<30?'var(--green)':p.bounce>60?'var(--red)':'var(--yellow)' }}>
+                          {(p.bounce||0).toFixed(1)}%
+                          {d && <DiffBadge current={p.bounce} prev={d.prevBounce} field="bounce" />}
+                        </td>
+                        <td style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.75rem', color:'var(--orange)', fontWeight:700 }}>{Math.round(p.priorityScore||0)}</td>
+                        <td style={{ padding:'0.55rem 0.5rem', textAlign:'center' }}><span className={'pb pb-'+p.category}>{CATEGORY_LABELS[p.category]}</span></td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
               {filteredProducts.length === 0 && <div style={{ textAlign:'center', padding:'3rem', color:'var(--dim2)', fontSize:'0.85rem' }}>条件に一致する商品がありません</div>}
             </div>
           </div>
         )}
+
+        {tab==='diff' && hasDiff && (
+          <div className="fade-up" style={{ maxWidth:1200, margin:'0 auto', padding:'1.5rem' }}>
+            <div style={{ marginBottom:'1.25rem', padding:'0.75rem 1rem', background:'rgba(0,212,170,0.06)', border:'1px solid rgba(0,212,170,0.2)', borderRadius:12, fontSize:'0.78rem', color:'var(--ai)' }}>
+              📊 比較対象: <strong>{compareTarget?.filename}</strong> ({formatDate(compareTarget?.uploadedAt)}) · マッチ商品: <strong>{diffProducts.length}件</strong>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem', marginBottom:'1.5rem' }}>
+              <div className="card" style={{ padding:'1.1rem' }}>
+                <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--green)', fontWeight:700, marginBottom:'0.75rem' }}>🟢 CTR 改善 TOP5</div>
+                {improvedCtr.map((p,i) => (
+                  <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'0.4rem 0', borderBottom:'1px solid var(--rim)' }}>
+                    <div style={{ fontSize:'0.75rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, marginRight:'0.5rem' }} title={p.name}>{p.name}</div>
+                    <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.72rem', color:'var(--green)', fontWeight:700, flexShrink:0 }}>
+                      {p.prevCtr.toFixed(2)}% → {p.ctr.toFixed(2)}%
+                      <span style={{ marginLeft:4 }}>▲{p.ctrDiff.toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="card" style={{ padding:'1.1rem' }}>
+                <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--red)', fontWeight:700, marginBottom:'0.75rem' }}>🔴 CTR 悪化 TOP5</div>
+                {worsenedCtr.map((p,i) => (
+                  <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'0.4rem 0', borderBottom:'1px solid var(--rim)' }}>
+                    <div style={{ fontSize:'0.75rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, marginRight:'0.5rem' }} title={p.name}>{p.name}</div>
+                    <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.72rem', color:'var(--red)', fontWeight:700, flexShrink:0 }}>
+                      {p.prevCtr.toFixed(2)}% → {p.ctr.toFixed(2)}%
+                      <span style={{ marginLeft:4 }}>▼{Math.abs(p.ctrDiff).toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="card" style={{ padding:'1.1rem' }}>
+                <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--green)', fontWeight:700, marginBottom:'0.75rem' }}>🟢 CVR 改善 TOP5</div>
+                {improvedCvr.map((p,i) => (
+                  <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'0.4rem 0', borderBottom:'1px solid var(--rim)' }}>
+                    <div style={{ fontSize:'0.75rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, marginRight:'0.5rem' }} title={p.name}>{p.name}</div>
+                    <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.72rem', color:'var(--green)', fontWeight:700, flexShrink:0 }}>
+                      {p.prevCvr.toFixed(2)}% → {p.cvr.toFixed(2)}%
+                      <span style={{ marginLeft:4 }}>▲{p.cvrDiff.toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="card" style={{ padding:'1.1rem' }}>
+                <div style={{ fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--red)', fontWeight:700, marginBottom:'0.75rem' }}>🔴 CVR 悪化 TOP5</div>
+                {worsenedCvr.map((p,i) => (
+                  <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'0.4rem 0', borderBottom:'1px solid var(--rim)' }}>
+                    <div style={{ fontSize:'0.75rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, marginRight:'0.5rem' }} title={p.name}>{p.name}</div>
+                    <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'0.72rem', color:'var(--red)', fontWeight:700, flexShrink:0 }}>
+                      {p.prevCvr.toFixed(2)}% → {p.cvr.toFixed(2)}%
+                      <span style={{ marginLeft:4 }}>▼{Math.abs(p.cvrDiff).toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="sec-hdr" style={{ marginBottom:'0.75rem' }}>
+              <span className="sec-title">全商品 差分一覧</span>
+              <span className="count-badge">{diffProducts.length}件</span>
+            </div>
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'0.78rem' }}>
+                <thead style={{ position:'sticky', top:0, zIndex:10, background:'var(--surface)' }}>
+                  <tr style={{ borderBottom:'2px solid var(--rim2)' }}>
+                    <th style={{ padding:'0.55rem 0.5rem', textAlign:'left', fontSize:'0.62rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', minWidth:200 }}>商品名</th>
+                    {[['salesDiff','売上差'],['ctrDiff','CTR差'],['cvrDiff','CVR差'],['bounceDiff','バウンス差']].map(([key,label]) => (
+                      <th key={key} onClick={() => handleDiffSort(key)} style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontSize:'0.62rem', color:diffSortKey===key?'var(--orange)':'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', cursor:'pointer', userSelect:'none', whiteSpace:'nowrap' }}>
+                        {label} {diffSortKey===key?(diffSortDir==='desc'?'▼':'▲'):'↕'}
+                      </th>
+                    ))}
+                    <th style={{ padding:'0.55rem 0.5rem', textAlign:'center', fontSize:'0.62rem', color:'var(--dim2)', fontWeight:700 }}>判定</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diffProducts.map((p,i) => (
+                    <tr key={i} style={{ borderBottom:'1px solid var(--rim)' }} onMouseEnter={e => e.currentTarget.style.background='rgba(255,107,43,0.04)'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                      <td style={{ padding:'0.5rem 0.5rem', fontSize:'0.75rem', fontWeight:600, maxWidth:280, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={p.name}>{p.name}</td>
+                      <td style={{ padding:'0.5rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.72rem', color:p.salesDiff>0?'var(--green)':p.salesDiff<0?'var(--red)':'var(--dim)' }}>
+                        {p.salesDiff>0?'+':''}{p.salesDiff.toLocaleString('en',{maximumFractionDigits:0})}
+                      </td>
+                      <td style={{ padding:'0.5rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.72rem', color:p.ctrDiff>0?'var(--green)':p.ctrDiff<0?'var(--red)':'var(--dim)' }}>
+                        {p.ctrDiff>0?'+':''}{p.ctrDiff.toFixed(2)}%
+                      </td>
+                      <td style={{ padding:'0.5rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.72rem', color:p.cvrDiff>0?'var(--green)':p.cvrDiff<0?'var(--red)':'var(--dim)' }}>
+                        {p.cvrDiff>0?'+':''}{p.cvrDiff.toFixed(2)}%
+                      </td>
+                      <td style={{ padding:'0.5rem 0.5rem', textAlign:'center', fontFamily:"'DM Mono',monospace", fontSize:'0.72rem', color:p.bounceDiff<0?'var(--green)':p.bounceDiff>0?'var(--red)':'var(--dim)' }}>
+                        {p.bounceDiff>0?'+':''}{p.bounceDiff.toFixed(1)}%
+                      </td>
+                      <td style={{ padding:'0.5rem 0.5rem', textAlign:'center' }}><span className={'pb pb-'+p.category}>{CATEGORY_LABELS[p.category]}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {tab==='roadmap' && (
           <div className="fade-up" style={{ maxWidth:1200, margin:'0 auto', padding:'1.5rem' }}>
             <div className="sec-hdr"><span className="sec-title">30日間 改善ロードマップ</span><span className="count-badge">{Math.min(sorted.length,30)}件</span></div>
@@ -399,6 +612,7 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
             </div>
           </div>
         )}
+
         {tab==='ai' && (
           <div className="fade-up" style={{ maxWidth:1200, margin:'0 auto', padding:'1.5rem' }}>
             <div style={{ background:'var(--card)', border:'1px solid rgba(0,212,170,0.2)', borderRadius:20, overflow:'hidden' }}>
