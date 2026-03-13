@@ -16,6 +16,7 @@ export default function DashboardPage({ uid: propUid }) {
   const [monthlyDiarySales, setMonthlyDiarySales] = useState({ php: 0, jpy: 0, days: 0 })
   const [weeklyDiarySales, setWeeklyDiarySales] = useState({ php: 0, jpy: 0, days: 0, cvr: 0, visitors: 0, orders: 0, followers: 0 })
   const [prevWeekDiarySales, setPrevWeekDiarySales] = useState({ php: 0, jpy: 0, orders: 0, cvr: 0 })
+  const [prevDayDiarySales, setPrevDayDiarySales] = useState({ php: 0, jpy: 0, orders: 0, cvr: 0, visitors: 0 })
   const [prevMonthDiarySales, setPrevMonthDiarySales] = useState({ php: 0, jpy: 0, orders: 0, cvr: 0 })
   const [todayDiarySales, setTodayDiarySales] = useState({ php: 0, jpy: 0 })
   const dropRef = useRef()
@@ -74,9 +75,18 @@ export default function DashboardPage({ uid: propUid }) {
         .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       setDiaryLogs(allLogs.slice(0, 30))
       // 今月の集計
-      const nowStr = new Date().toISOString().slice(0, 7) // 'YYYY-MM'
+      // JST日付ヘルパー（UTC+9）
+      const toJSTStr = (d) => {
+        const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+        return jst.toISOString().slice(0, 10)
+      }
+      const toJSTMonthStr = (d) => {
+        const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+        return jst.toISOString().slice(0, 7)
+      }
+      const nowStr = toJSTMonthStr(new Date()) // 'YYYY-MM'
       const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
-      const todayStr2 = yesterday.toISOString().slice(0, 10)
+      const todayStr2 = toJSTStr(yesterday)
       const monthLogs = allLogs.filter(l => (l.date || '').startsWith(nowStr))
       const monthPhp = monthLogs.reduce((s, l) => s + (Number(l.sales_php) || 0), 0)
       const monthJpy = monthLogs.reduce((s, l) => s + (Number(l.sales_jpy) || 0), 0)
@@ -86,7 +96,7 @@ export default function DashboardPage({ uid: propUid }) {
       setMonthlyDiarySales({ php: monthPhp, jpy: monthJpy, days: monthLogs.length, cvr: monthlyCvr, visitors: monthVisitors, orders: monthOrdersD })
       // 週次集計（直近7日）
       const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
-      const weekStr = weekAgo.toISOString().slice(0, 10)
+      const weekStr = toJSTStr(weekAgo)
       const weekLogs = allLogs.filter(l => (l.date || '') >= weekStr)
       const weekPhp = weekLogs.reduce((s, l) => s + (Number(l.sales_php) || 0), 0)
       const weekJpy = weekLogs.reduce((s, l) => s + (Number(l.sales_jpy) || 0), 0)
@@ -98,8 +108,8 @@ export default function DashboardPage({ uid: propUid }) {
       // 先週比（8〜14日前）
       const prevWeekFrom = new Date(); prevWeekFrom.setDate(prevWeekFrom.getDate() - 14)
       const prevWeekTo = new Date(); prevWeekTo.setDate(prevWeekTo.getDate() - 8)
-      const prevWeekFromStr = prevWeekFrom.toISOString().slice(0, 10)
-      const prevWeekToStr = prevWeekTo.toISOString().slice(0, 10)
+      const prevWeekFromStr = toJSTStr(prevWeekFrom)
+      const prevWeekToStr = toJSTStr(prevWeekTo)
       const prevWeekLogs = allLogs.filter(l => (l.date || '') >= prevWeekFromStr && (l.date || '') <= prevWeekToStr)
       const prevWeekPhp = prevWeekLogs.reduce((s, l) => s + (Number(l.sales_php) || 0), 0)
       const prevWeekJpy = prevWeekLogs.reduce((s, l) => s + (Number(l.sales_jpy) || 0), 0)
@@ -109,7 +119,7 @@ export default function DashboardPage({ uid: propUid }) {
       setPrevWeekDiarySales({ php: prevWeekPhp, jpy: prevWeekJpy, orders: prevWeekOrders, cvr: prevWeekCvr })
       // 先月比
       const prevMonthDate = new Date(); prevMonthDate.setMonth(prevMonthDate.getMonth() - 1)
-      const prevMonthStr = prevMonthDate.toISOString().slice(0, 7)
+      const prevMonthStr = toJSTMonthStr(prevMonthDate)
       const prevMonthLogs = allLogs.filter(l => (l.date || '').startsWith(prevMonthStr))
       const prevMonthPhp = prevMonthLogs.reduce((s, l) => s + (Number(l.sales_php) || 0), 0)
       const prevMonthJpy = prevMonthLogs.reduce((s, l) => s + (Number(l.sales_jpy) || 0), 0)
@@ -133,6 +143,20 @@ export default function DashboardPage({ uid: propUid }) {
         visitors,
         clicks,
         cvr: Math.round(cvr * 100) / 100,
+      })
+      // 一昨日（前日比用）
+      const dayBeforeYesterday = new Date(); dayBeforeYesterday.setDate(dayBeforeYesterday.getDate() - 2)
+      const dayBeforeStr = toJSTStr(dayBeforeYesterday)
+      const dayBeforeLog = allLogs.find(l => l.date === dayBeforeStr)
+      const dayBeforeVisitors = Number(dayBeforeLog?.visitors) || 0
+      const dayBeforeOrders = Number(dayBeforeLog?.orders) || 0
+      const dayBeforeCvr = dayBeforeVisitors > 0 ? Math.round(dayBeforeOrders / dayBeforeVisitors * 10000) / 100 : 0
+      setPrevDayDiarySales({
+        php: Number(dayBeforeLog?.sales_php) || 0,
+        jpy: Number(dayBeforeLog?.sales_jpy) || 0,
+        orders: dayBeforeOrders,
+        visitors: dayBeforeVisitors,
+        cvr: dayBeforeCvr,
       })
     } catch(e) { console.error('diary fetch error:', e) }
     // ShopeeManagerデータ取得
@@ -436,11 +460,11 @@ export default function DashboardPage({ uid: propUid }) {
                 {/* 2. Diary KPI（前日） */}
                 <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1.25rem 0 0.75rem' }}>📅 前日の実績（Diary）</div>
                 <KpiCards items={[
-                  { l:'売上', v: todayDiarySales.jpy ? '¥'+todayDiarySales.jpy.toLocaleString() : todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '' },
-                  { l:'注文数', v: todayDiarySales.orders ? todayDiarySales.orders+'件' : '-', a:'var(--blue, #3b82f6)', sub: todayDiarySales.cancelled ? 'キャンセル '+todayDiarySales.cancelled+'件' : '' },
+                  { l:'売上', v: todayDiarySales.jpy ? '¥'+todayDiarySales.jpy.toLocaleString() : todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '-', a:'var(--orange)', sub: todayDiarySales.php ? '₱'+Math.round(todayDiarySales.php).toLocaleString() : '', d: prevDayDiarySales.php||prevDayDiarySales.jpy ? (todayDiarySales.jpy||Math.round(todayDiarySales.php||0)) - (prevDayDiarySales.jpy||Math.round(prevDayDiarySales.php||0)) : undefined, fmt: v => Math.abs(v).toLocaleString(), sub2:'前日比' },
+                  { l:'注文数', v: todayDiarySales.orders ? todayDiarySales.orders+'件' : '-', a:'var(--blue, #3b82f6)', sub: todayDiarySales.cancelled ? 'キャンセル '+todayDiarySales.cancelled+'件' : '', d: prevDayDiarySales.orders ? todayDiarySales.orders - prevDayDiarySales.orders : undefined, fmt: v => Math.abs(v)+'件', sub2:'前日比' },
                   { l:'OCR', v: todayDiarySales.ocr ? todayDiarySales.ocr+'%' : '-', a: todayDiarySales.ocr > 5 ? 'var(--green)' : 'var(--yellow)' },
-                  { l:'Visitors', v: todayDiarySales.visitors ? todayDiarySales.visitors.toLocaleString() : '-', a:'var(--blue, #3b82f6)', sub: todayDiarySales.clicks ? 'Clicks: '+todayDiarySales.clicks : '' },
-                  { l:'CVR', v: todayDiarySales.cvr ? todayDiarySales.cvr.toFixed(2)+'%' : '-', a: todayDiarySales.cvr > 5 ? 'var(--green)' : todayDiarySales.cvr < 3 ? 'var(--red)' : 'var(--yellow)', sub: 'V:'+todayDiarySales.visitors+' O:'+todayDiarySales.orders },
+                  { l:'Visitors', v: todayDiarySales.visitors ? todayDiarySales.visitors.toLocaleString() : '-', a:'var(--blue, #3b82f6)', sub: todayDiarySales.clicks ? 'Clicks: '+todayDiarySales.clicks : '', d: prevDayDiarySales.visitors ? todayDiarySales.visitors - prevDayDiarySales.visitors : undefined, fmt: v => Math.abs(v).toLocaleString(), sub2:'前日比' },
+                  { l:'CVR', v: todayDiarySales.cvr ? todayDiarySales.cvr.toFixed(2)+'%' : '-', a: todayDiarySales.cvr > 5 ? 'var(--green)' : todayDiarySales.cvr < 3 ? 'var(--red)' : 'var(--yellow)', sub: 'V:'+todayDiarySales.visitors+' O:'+todayDiarySales.orders, d: prevDayDiarySales.cvr ? todayDiarySales.cvr - prevDayDiarySales.cvr : undefined, fmt: v => Math.abs(v).toFixed(2)+'%', sub2:'前日比' },
                   { l:'フォロワー', v: todayDiarySales.followers ? Number(todayDiarySales.followers).toLocaleString() : '-', a:'var(--ai)' },
                 ]} />
 
