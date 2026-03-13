@@ -454,6 +454,9 @@ export default function DashboardPage({ uid: propUid }) {
             {tab === 'yesterday' && (
               <div className="fade-up">
 
+                {/* AI ダッシュボードウィジェット */}
+                <AIDashboardWidget diaryLogs={diaryLogs} weeklyDiarySales={weeklyDiarySales} monthlyDiarySales={monthlyDiarySales} todayDiarySales={todayDiarySales} latest={latest} fxRate={fxRate} />
+
                 {/* 1. 今月の目標ペース */}
                 <GoalPaceBlock uid={propUid || auth.currentUser?.uid} latest={latest} monthlyDiarySales={monthlyDiarySales} fxRateOverride={fxRate} shopeeIncome={shopeeIncome} inventoryCost={inventoryCost} monthOrders={monthOrders} weeklyDiarySales={weeklyDiarySales} todayDiarySales={todayDiarySales} period='today' />
 
@@ -784,6 +787,129 @@ function GoalPaceBar({ label, unit, color, actual, target, daysElapsed, daysInMo
       <div style={{ fontSize:'0.6rem', color:'var(--dim2)', marginTop:'0.2rem', textAlign:'right' }}>
         今日時点の期待値: {expectedPct}%
       </div>
+    </div>
+  )
+}
+
+
+function AIDashboardWidget({ diaryLogs, weeklyDiarySales, monthlyDiarySales, todayDiarySales, latest, fxRate }) {
+  const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  async function analyze() {
+    setLoading(true)
+    setOpen(true)
+    try {
+      // 過去30日のDiaryデータを整形
+      const recentLogs = diaryLogs.slice(0, 30).map(l => ({
+        date: l.date,
+        sales_php: Number(l.sales_php) || 0,
+        orders: Number(l.orders) || 0,
+        visitors: Number(l.visitors) || 0,
+        cvr: l.visitors > 0 ? Math.round(Number(l.orders) / Number(l.visitors) * 10000) / 100 : 0,
+      }))
+
+      const urgentProducts = (latest?.products || [])
+        .filter(p => p.category === 'urgent' || p.priorityScore > 70)
+        .slice(0, 5)
+        .map(p => ({ name: p.name, ctr: p.ctr, cvr: p.cvr, sales: p.sales }))
+
+      const prompt = `あなたはShopeeフィリピンの販売コンサルタントです。以下のデータを分析して日本語で回答してください。
+
+## 直近30日のDiary実績（新しい順）
+${JSON.stringify(recentLogs.slice(0, 10), null, 2)}
+
+## 今週の集計
+- 売上: ₱${Math.round(weeklyDiarySales.php || 0).toLocaleString()} / ¥${Math.round(weeklyDiarySales.jpy || 0).toLocaleString()}
+- 注文数: ${weeklyDiarySales.orders || 0}件
+- CVR: ${(weeklyDiarySales.cvr || 0).toFixed(2)}%
+- 記録日数: ${weeklyDiarySales.days || 0}日
+
+## 今月の集計
+- 売上: ₱${Math.round(monthlyDiarySales.php || 0).toLocaleString()}
+- 注文数: ${monthlyDiarySales.orders || 0}件
+- CVR: ${(monthlyDiarySales.cvr || 0).toFixed(2)}%
+- 記録日数: ${monthlyDiarySales.days || 0}日
+
+## 緊急改善商品（優先度TOP5）
+${JSON.stringify(urgentProducts, null, 2)}
+
+## 回答形式（必ずこの形式で）
+以下の4セクションをそれぞれ簡潔に回答してください：
+
+### 📈 トレンド分析
+過去30日の売上・CVRトレンドを3行以内で分析
+
+### 🎯 今週のアクションプラン
+今週やるべき具体的なアクションを3つ箇条書き
+
+### 🔴 緊急改善アドバイス
+優先度の高い商品への具体的な改善提案を2つ
+
+### 💰 今月の売上着地予測
+現在のペースから今月末の売上を予測（根拠も一行で）`
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
+      const data = await response.json()
+      const text = data.content?.[0]?.text || 'エラーが発生しました'
+      setResult(text)
+    } catch(e) {
+      setResult('分析に失敗しました: ' + e.message)
+    }
+    setLoading(false)
+  }
+
+  // マークダウン風テキストを簡易レンダリング
+  function renderText(text) {
+    return text.split('\n').map((line, i) => {
+      if (line.startsWith('### ')) return <div key={i} style={{ fontSize:'0.82rem', fontWeight:900, color:'var(--ai)', margin:'1rem 0 0.4rem', borderBottom:'1px solid rgba(0,212,170,0.2)', paddingBottom:'0.3rem' }}>{line.replace('### ','')}</div>
+      if (line.startsWith('- ')) return <div key={i} style={{ fontSize:'0.78rem', color:'var(--text)', padding:'0.2rem 0 0.2rem 1rem', borderLeft:'2px solid rgba(0,212,170,0.3)', marginBottom:'0.25rem' }}>{line.replace('- ','')}</div>
+      if (line.trim() === '') return <div key={i} style={{ height:'0.4rem' }} />
+      return <div key={i} style={{ fontSize:'0.78rem', color:'var(--text)', marginBottom:'0.2rem', lineHeight:1.6 }}>{line}</div>
+    })
+  }
+
+  return (
+    <div className="card" style={{ marginBottom:'1.5rem', border:'1px solid rgba(0,212,170,0.25)', borderTop:'2px solid var(--ai)', overflow:'hidden' }}>
+      <div style={{ padding:'1rem 1.25rem', display:'flex', alignItems:'center', gap:'0.75rem', cursor:'pointer' }} onClick={() => !result && !loading ? analyze() : setOpen(o => !o)}>
+        <div style={{ fontSize:'1.2rem' }}>🤖</div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:'0.82rem', fontWeight:900, color:'var(--ai)' }}>AI ダッシュボードアドバイザー</div>
+          <div style={{ fontSize:'0.65rem', color:'var(--dim2)' }}>トレンド分析 · アクションプラン · 売上予測</div>
+        </div>
+        {!result && !loading && (
+          <button onClick={e => { e.stopPropagation(); analyze() }} style={{ padding:'0.4rem 1rem', borderRadius:8, border:'none', background:'var(--ai)', color:'#fff', fontSize:'0.75rem', fontWeight:700, cursor:'pointer' }}>
+            ✨ 分析する
+          </button>
+        )}
+        {result && <span style={{ fontSize:'0.75rem', color:'var(--dim2)' }}>{open ? '▲ 閉じる' : '▼ 開く'}</span>}
+        {loading && <span style={{ fontSize:'0.75rem', color:'var(--ai)', fontWeight:700 }}>⏳ 分析中...</span>}
+      </div>
+      {loading && (
+        <div style={{ padding:'2rem', textAlign:'center' }}>
+          <div className="spinner" style={{ borderColor:'rgba(0,212,170,0.2)', borderTopColor:'var(--ai)' }} />
+          <div style={{ fontSize:'0.75rem', color:'var(--ai)', marginTop:'0.75rem' }}>データを分析しています...</div>
+        </div>
+      )}
+      {result && open && (
+        <div style={{ padding:'0 1.25rem 1.25rem' }}>
+          <div style={{ padding:'1rem', background:'rgba(0,212,170,0.04)', borderRadius:10, border:'1px solid rgba(0,212,170,0.1)' }}>
+            {renderText(result)}
+          </div>
+          <button onClick={analyze} style={{ marginTop:'0.75rem', padding:'0.35rem 0.9rem', borderRadius:8, border:'1px solid rgba(0,212,170,0.3)', background:'transparent', color:'var(--ai)', fontSize:'0.7rem', cursor:'pointer', fontWeight:700 }}>
+            🔄 再分析
+          </button>
+        </div>
+      )}
     </div>
   )
 }
