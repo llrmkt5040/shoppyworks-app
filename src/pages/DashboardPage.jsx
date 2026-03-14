@@ -509,7 +509,7 @@ export default function DashboardPage({ uid: propUid }) {
                 )}
 
                 {/* 6. 前回比（パフォーマンスレポート） */}
-                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1rem 0' }}>📊 前回アップとの差分</div>
+                <div style={{ fontSize:'0.7rem', color:'var(--dim2)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', margin:'1rem 0' }}>📊 Analyzer前回アップとの比較</div>
                 {histories.length < 2 ? (
                   <div style={{ textAlign:'center', padding:'3rem', color:'var(--dim2)', fontSize:'0.85rem', border:'1px solid var(--rim)', borderRadius:12 }}>2件以上のデータが必要です</div>
                 ) : (
