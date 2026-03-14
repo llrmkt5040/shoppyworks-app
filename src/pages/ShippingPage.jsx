@@ -16,18 +16,6 @@ function Badge({ status }) {
   return <span style={{ background:bg, color:fg, borderRadius:6, padding:"2px 8px", fontSize:11, fontWeight:700, whiteSpace:"nowrap" }}>{status}</span>
 }
 
-function UploadArea({ label, onUpload, uploaded, fileName }) {
-  return (
-    <label style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", border:"1.5px dashed var(--rim)", borderRadius:10, cursor:"pointer", background:"var(--surface)" }}>
-      <span style={{ fontSize:20 }}>{uploaded?"✅":"📂"}</span>
-      <div>
-        <div style={{ fontSize:12, fontWeight:700, color:uploaded?"#16a34a":"#475569" }}>{label}</div>
-        {fileName && <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{fileName}</div>}
-      </div>
-      <input type="file" accept=".xlsx,.xls" onChange={onUpload} style={{ display:"none" }} />
-    </label>
-  )
-}
 
 export default function ShippingPage({ uid, viewOnly }) {
   const [orders, setOrders] = useState([])
@@ -48,43 +36,27 @@ export default function ShippingPage({ uid, viewOnly }) {
         const fxSnap = await getDoc(doc(db, "fx_rates", uid))
         if (fxSnap.exists()) setFxRate(Number(fxSnap.data().rate_php_jpy) || 0)
       } catch(e) {}
-      const snap = await getDocs(collection(db, "shopee_orders"))
-      const myDocs = snap.docs.filter(d => d.data().userId === uid)
-      if (myDocs.length === 0) { setLoading(false); return }
-      const latest = myDocs.sort((a,b) => (b.data().uploadedAt?.seconds||0) - (a.data().uploadedAt?.seconds||0))[0].data()
-      setOrders(latest.orders || [])
-      setFileName(latest.filename || "")
+      // ShopeeManagerと同じデータソースを参照（重複アップロード不要）
+      const docId = uid + "_orders"
+      const snap = await getDoc(doc(db, "shopee_orders", docId))
+      if (snap.exists()) {
+        setOrders(snap.data().orders || [])
+        setFileName(snap.data().filename || "")
+      } else {
+        // フォールバック：旧形式対応
+        const colSnap = await getDocs(collection(db, "shopee_orders"))
+        const myDocs = colSnap.docs.filter(d => d.data().userId === uid)
+        if (myDocs.length > 0) {
+          const latest = myDocs.sort((a,b) => (b.data().uploadedAt?.seconds||0) - (a.data().uploadedAt?.seconds||0))[0].data()
+          setOrders(latest.orders || [])
+          setFileName(latest.filename || "")
+        }
+      }
     } catch(e) { console.error(e) }
     setLoading(false)
   }
 
-  async function handleOrderUpload(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    try {
-      const XLSX = await import("xlsx")
-      const buf = await file.arrayBuffer()
-      const wb = XLSX.read(buf)
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(ws, { header:1 })
-      const headerIdx = rows.findIndex(r => r.some(c => String(c||"").includes("Order ID")))
-      if (headerIdx < 0) { alert("注文レポートの形式が正しくありません"); return }
-      const headers = rows[headerIdx].map(h => String(h||"").trim())
-      const get = (row, ...names) => { for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i>=0 && row[i]!=null) return String(row[i]).trim() } return "" }
-      const parsed = rows.slice(headerIdx+1).filter(r => get(r,"Order ID")).map(r => ({
-        orderId: get(r,"Order ID"), orderDate: get(r,"Order Creation Date","Order Date"),
-        product: get(r,"Product Name","Item Name"), qty: Number(get(r,"Quantity"))||1,
-        total: Number(get(r,"Total Amount","Amount"))||0, status: get(r,"Order Status","Status"),
-        tracking: get(r,"Tracking Number","Tracking No"), shipTime: get(r,"Ship Time","Shipment Date"),
-        sku: get(r,"Parent SKU","SKU"),
-      }))
-      const { db } = await import("../lib/firebase")
-      const { collection, addDoc } = await import("firebase/firestore")
-      await addDoc(collection(db,"shopee_orders"), { userId:uid, orders:parsed, filename:file.name, uploadedAt:new Date() })
-      setOrders(parsed); setFileName(file.name)
-      alert("✅ " + parsed.length + "件の注文を読み込みました")
-    } catch(e) { alert("読み込みエラー: " + e.message) }
-  }
+
 
   const counts = orders.reduce((acc,o) => { acc[o.status]=(acc[o.status]||0)+1; return acc }, {})
   const filtered = filter==="all" ? orders : orders.filter(o=>o.status===filter)
@@ -95,10 +67,17 @@ export default function ShippingPage({ uid, viewOnly }) {
 
   return (
     <div>
-      {/* アップロードエリア */}
-      <div style={{ marginBottom:16 }}>
-        <UploadArea label={orders.length > 0 ? `再アップロード（現在: ${fileName||"未アップロード"}）` : "注文レポート XLSX（Order_all_xxxx.xlsx）"} onUpload={handleOrderUpload} uploaded={orders.length>0} fileName={fileName} />
-      </div>
+      {/* データソース案内 */}
+      {fileName && (
+        <div style={{ marginBottom:16, padding:"8px 14px", background:"rgba(34,197,94,0.08)", borderRadius:8, border:"1px solid rgba(34,197,94,0.2)", fontSize:12, color:"#22c55e", fontWeight:600 }}>
+          ✅ データソース: {fileName}（ProfitManagerでアップロード済み）
+        </div>
+      )}
+      {!fileName && (
+        <div style={{ marginBottom:16, padding:"12px 16px", background:"rgba(249,115,22,0.08)", borderRadius:8, border:"1px solid rgba(249,115,22,0.2)", fontSize:13, color:"var(--orange)" }}>
+          📂 注文データがありません。<strong>💰 ProfitManager</strong> からXLSXをアップロードしてください。
+        </div>
+      )}
 
       {orders.length === 0 ? (
         <div className="card" style={{ padding:"2rem", textAlign:"center", color:"var(--dim2)" }}>
