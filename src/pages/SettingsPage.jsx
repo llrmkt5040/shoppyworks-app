@@ -221,17 +221,39 @@ function SystemTab() {
   const [apiSaved, setApiSaved] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
+  const [aiEnabled, setAiEnabled] = useState(true)
 
-  function saveApiKey() {
-    if (!apiKey.trim()) {
-      localStorage.removeItem("sw_anthropic_key")
+  // Firestoreから読み込み
+  useEffect(() => {
+    (async () => {
+      try {
+        const { getDoc: gd, doc: d } = await import("firebase/firestore")
+        const { db, auth: a } = await import("../lib/firebase")
+        const snap = await gd(d(db, "user_settings", a.currentUser?.uid))
+        if (snap.exists()) {
+          if (snap.data().ai_key) setApiKey(snap.data().ai_key)
+          if (snap.data().ai_enabled !== undefined) setAiEnabled(snap.data().ai_enabled)
+        }
+      } catch(e) {}
+    })()
+  }, [])
+
+  async function saveApiKey() {
+    try {
+      const { saveAiKey } = await import("../lib/ai")
+      await saveAiKey(apiKey.trim() || "")
       setApiSaved(true)
       setTimeout(() => setApiSaved(false), 2000)
-      return
-    }
-    localStorage.setItem("sw_anthropic_key", apiKey.trim())
-    setApiSaved(true)
-    setTimeout(() => setApiSaved(false), 2000)
+    } catch(e) { alert("保存エラー: " + e.message) }
+  }
+
+  async function toggleAiEnabled() {
+    try {
+      const next = !aiEnabled
+      const { setAiEnabled: sae } = await import("../lib/ai")
+      await sae(next)
+      setAiEnabled(next)
+    } catch(e) { alert("切替エラー: " + e.message) }
   }
 
   async function testApiKey() {
@@ -276,6 +298,15 @@ function SystemTab() {
         <p style={{ fontSize:"0.78rem", color:"var(--dim2)", marginBottom:"1rem", lineHeight:1.6 }}>
           AI機能（ダッシュボード分析・Pasabuy価格提案・MassUpdate補完）を使うには、Anthropic APIキーが必要です。<br/>
           キーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" style={{ color:"var(--ai)" }}>console.anthropic.com</a> から取得できます。
+          <div style={{ marginTop:"1rem", padding:"0.75rem 1rem", borderRadius:10, background: aiEnabled ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)", border: "1px solid " + (aiEnabled ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"), display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:"0.78rem", fontWeight:700 }}>AI機能（スタッフ共有）</div>
+              <div style={{ fontSize:"0.65rem", color:"var(--dim2)" }}>OFFにするとスタッフを含む全員のAI機能が停止します</div>
+            </div>
+            <button onClick={toggleAiEnabled} style={{ padding:"0.4rem 1rem", borderRadius:8, border:"none", background: aiEnabled ? "#22c55e" : "#6b7280", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:"0.78rem" }}>
+              {aiEnabled ? "✅ ON" : "⛔ OFF"}
+            </button>
+          </div>
         </p>
         <div style={{ display:"flex", gap:"0.5rem", marginBottom:"0.75rem" }}>
           <input
@@ -297,7 +328,7 @@ function SystemTab() {
             {testing ? "⏳ テスト中..." : "🧪 接続テスト"}
           </button>
           {apiKey && (
-            <button onClick={() => { setApiKey(""); localStorage.removeItem("sw_anthropic_key") }} style={{ padding:"0.5rem 1rem", borderRadius:8, border:"1px solid rgba(239,68,68,0.3)", background:"rgba(239,68,68,0.08)", color:"#ef4444", fontWeight:700, cursor:"pointer", fontSize:"0.78rem" }}>
+            <button onClick={async () => { setApiKey(""); const { saveAiKey } = await import("../lib/ai"); await saveAiKey("") }} style={{ padding:"0.5rem 1rem", borderRadius:8, border:"1px solid rgba(239,68,68,0.3)", background:"rgba(239,68,68,0.08)", color:"#ef4444", fontWeight:700, cursor:"pointer", fontSize:"0.78rem" }}>
               🗑 削除
             </button>
           )}

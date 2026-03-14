@@ -158,6 +158,14 @@ export default function AppLayout() {
 
   // 実効UID（誰のデータを見るか）
   const effectiveUid = supportTarget?.uid || staffTarget?.uid || user?.uid
+  // スタッフの場合、オーナーUIDを記録（AI共有用）
+  useEffect(() => {
+    if (staffTarget?.uid && user?.uid && staffTarget.uid !== user.uid) {
+      localStorage.setItem("sw_owner_uid", staffTarget.uid)
+    } else {
+      localStorage.removeItem("sw_owner_uid")
+    }
+  }, [staffTarget?.uid, user?.uid])
 
   // ページ権限取得
   function getPagePerm(pageId) {

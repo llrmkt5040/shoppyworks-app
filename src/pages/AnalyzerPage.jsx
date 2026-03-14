@@ -34,6 +34,106 @@ function DiffBadge({ current, prev, field, suffix='%', decimals=2 }) {
   )
 }
 
+function AiAdvisorTab({ products, kpis, uid }) {
+  const [aiResult, setAiResult] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState(null)
+
+  async function runAnalysis() {
+    if (!products || products.length === 0) return setAiError("先にXLSXをアップロードしてください")
+    setAiLoading(true); setAiError(null); setAiResult(null)
+    try {
+      const { callClaude } = await import("../lib/ai")
+      // 上位・下位商品を抽出
+      const sorted = [...products].sort((a,b) => b.sales - a.sales)
+      const top5 = sorted.slice(0, 5).map(p => `${p.name}: 売上${p.sales}個, CTR${p.ctr||0}%, CVR${p.cvr||0}%, Imp${p.impressions||0}`)
+      const bottom5 = sorted.filter(p => p.sales === 0 || p.impressions > 50).slice(-5).map(p => `${p.name}: 売上${p.sales}個, CTR${p.ctr||0}%, CVR${p.cvr||0}%, Imp${p.impressions||0}`)
+      
+      const prompt = `あなたはShopee Philippines（フィリピン越境EC）の専門コンサルタントです。
+以下のショップデータを分析し、具体的な改善アクションを日本語で提案してください。
+
+【全体KPI】
+- 総商品数: ${products.length}
+- 総売上数: ${kpis?.totalSales || 0}個
+- 平均CTR: ${kpis?.avgCtr || 0}%
+- 平均CVR: ${kpis?.avgCvr || 0}%
+
+【売上TOP5】
+${top5.join('\n')}
+
+【改善候補（売上0 or 低パフォーマンス）】
+${bottom5.join('\n')}
+
+以下の形式で回答してください：
+## 🏆 好調商品の伸ばし方（TOP5について）
+具体的なアクション3つ
+
+## ⚠️ 改善が必要な商品（低パフォーマンスについて）
+具体的なアクション3つ
+
+## 📈 全体戦略の提案
+CTR/CVR改善のための具体的なアクション3つ
+
+## 🎯 今週やるべきこと TOP3
+最も優先度の高いアクション`
+
+      const result = await callClaude([{ role: "user", content: prompt }], uid, { maxTokens: 2000 })
+      setAiResult(result)
+    } catch(e) { setAiError(e.message) }
+    setAiLoading(false)
+  }
+
+  return (
+    <div className="fade-up" style={{ maxWidth:1200, margin:'0 auto', padding:'1.5rem' }}>
+      <div style={{ background:'var(--card)', border:'1px solid rgba(0,212,170,0.2)', borderRadius:20, overflow:'hidden' }}>
+        <div style={{ padding:'1rem 1.5rem', background:'linear-gradient(135deg,rgba(0,212,170,0.06),rgba(0,212,170,0.02))', borderBottom:'1px solid rgba(0,212,170,0.12)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <div style={{ fontSize:'0.9rem', fontWeight:900, color:'var(--ai)' }}>🤖 Claude AI 改善アドバイザー</div>
+            <div style={{ fontSize:'0.72rem', color:'var(--dim2)' }}>アップロードした商品データをAIが分析し、具体的な改善提案を行います</div>
+          </div>
+          <button onClick={runAnalysis} disabled={aiLoading} style={{ padding:'0.6rem 1.5rem', borderRadius:12, border:'none', background: aiLoading ? '#6b7280' : 'linear-gradient(135deg,#00d4aa,#00b894)', color:'#fff', fontWeight:800, cursor: aiLoading ? 'wait' : 'pointer', fontSize:'0.82rem', boxShadow:'0 4px 15px rgba(0,212,170,0.3)' }}>
+            {aiLoading ? '⏳ 分析中...' : '🚀 AI分析を実行'}
+          </button>
+        </div>
+        
+        <div style={{ padding:'1.5rem' }}>
+          {aiError && (
+            <div style={{ padding:'1rem', borderRadius:12, background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.3)', color:'#ef4444', fontSize:'0.82rem', marginBottom:'1rem' }}>
+              ❌ {aiError}
+            </div>
+          )}
+          
+          {!aiResult && !aiLoading && !aiError && (
+            <div style={{ padding:'3rem', textAlign:'center', color:'var(--dim2)' }}>
+              <div style={{ fontSize:'2.5rem', marginBottom:'0.75rem', opacity:0.4 }}>🤖</div>
+              <div style={{ fontSize:'0.85rem' }}>「AI分析を実行」ボタンを押すと、商品データに基づいた改善提案が表示されます</div>
+              <div style={{ fontSize:'0.72rem', color:'var(--dim)', marginTop:'0.5rem' }}>※ 設定→システムタブでAPIキーの登録が必要です</div>
+            </div>
+          )}
+          
+          {aiLoading && (
+            <div style={{ padding:'3rem', textAlign:'center' }}>
+              <div style={{ fontSize:'2rem', marginBottom:'0.75rem', animation:'pulse 1.5s infinite' }}>🧠</div>
+              <div style={{ fontSize:'0.85rem', color:'var(--ai)' }}>商品データを分析中です...</div>
+            </div>
+          )}
+          
+          {aiResult && (
+            <div style={{ fontSize:'0.82rem', lineHeight:'1.8', color:'var(--text)', whiteSpace:'pre-wrap' }}>
+              {aiResult.split('## ').filter(Boolean).map((section, i) => (
+                <div key={i} style={{ marginBottom:'1.25rem', padding:'1rem', borderRadius:12, background:'rgba(0,212,170,0.04)', border:'1px solid rgba(0,212,170,0.1)' }}>
+                  <div style={{ fontWeight:800, fontSize:'0.88rem', marginBottom:'0.5rem', color:'var(--ai)' }}>## {section.split('\n')[0]}</div>
+                  <div style={{ whiteSpace:'pre-wrap' }}>{section.split('\n').slice(1).join('\n')}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AnalyzerPage({ uid: propUid, onNavigate }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -613,20 +713,7 @@ export default function AnalyzerPage({ uid: propUid, onNavigate }) {
           </div>
         )}
 
-        {tab==='ai' && (
-          <div className="fade-up" style={{ maxWidth:1200, margin:'0 auto', padding:'1.5rem' }}>
-            <div style={{ background:'var(--card)', border:'1px solid rgba(0,212,170,0.2)', borderRadius:20, overflow:'hidden' }}>
-              <div style={{ padding:'1rem 1.5rem', background:'linear-gradient(135deg,rgba(0,212,170,0.06),rgba(0,212,170,0.02))', borderBottom:'1px solid rgba(0,212,170,0.12)' }}>
-                <div style={{ fontSize:'0.9rem', fontWeight:900, color:'var(--ai)' }}>🤖 Claude AI 改善アドバイザー</div>
-                <div style={{ fontSize:'0.72rem', color:'var(--dim2)' }}>4月以降利用可能になります</div>
-              </div>
-              <div style={{ padding:'3rem', textAlign:'center', color:'var(--dim2)' }}>
-                <div style={{ fontSize:'2.5rem', marginBottom:'0.75rem', opacity:0.4 }}>🔧</div>
-                <div style={{ fontSize:'0.85rem' }}>現在メンテナンス中です。4月以降に利用可能になります。</div>
-              </div>
-            </div>
-          </div>
-        )}
+        {tab==='ai' && <AiAdvisorTab products={data?.products} kpis={data?.kpis} uid={propUid} />}
       </div>
     </div>
   )

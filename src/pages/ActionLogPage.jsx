@@ -120,6 +120,7 @@ export default function ActionLogPage({ uid: propUid }) {
     usage_new_buyer: "", usage_repeat_buyer: "", memo: ""
   })
 
+  const [shopUrlSaved, setShopUrlSaved] = useState(false)
   const [prevRate, setPrevRate] = useState(null)
   const [settings, setSettings] = useState({})
 
@@ -132,10 +133,22 @@ export default function ActionLogPage({ uid: propUid }) {
   async function loadSettings() {
     try {
       const snap = await getDoc(doc(db, "user_settings", propUid || auth.currentUser?.uid))
-      if (snap.exists() && snap.data().field_visibility) {
-        setSettings(snap.data().field_visibility)
+      if (snap.exists()) {
+        if (snap.data().field_visibility) setSettings(snap.data().field_visibility)
+        if (snap.data().shop_url) setForm(f => ({ ...f, shop_url: snap.data().shop_url }))
       }
     } catch(e) { console.error(e) }
+  }
+
+  async function saveShopUrl(url) {
+    try {
+      const uid = propUid || auth.currentUser?.uid
+      console.log("shop_url保存中:", uid, url)
+      await setDoc(doc(db, "user_settings", uid), { shop_url: url }, { merge: true })
+      console.log("shop_url保存完了")
+      setShopUrlSaved(true)
+      setTimeout(() => setShopUrlSaved(false), 2000)
+    } catch(e) { console.error("shop_url保存エラー:", e) }
   }
 
   function show(key) {
@@ -367,8 +380,8 @@ export default function ActionLogPage({ uid: propUid }) {
           {(show("followers")||show("rating_stars")||show("rating")) && (
             <Section title="フォロー・評価">
               <div>
-                <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>🔗 ショップURL</label>
-                <input type="url" value={form.shop_url||""} onChange={e => set("shop_url", e.target.value)} placeholder="https://shopee.ph/your-shop"
+                <label style={{fontSize:"0.68rem",fontWeight:700,color:"var(--dim2)",textTransform:"uppercase",display:"block",marginBottom:"0.25rem"}}>🔗 ショップURL <span style={{fontSize:"0.6rem",color:"var(--green)",fontWeight:400}}>{shopUrlSaved ? "✓ 保存しました！" : form.shop_url ? "✓ 保存済み" : ""}</span></label>
+                <input type="url" value={form.shop_url||""} onChange={e => set("shop_url", e.target.value)} onBlur={e => { if(e.target.value) saveShopUrl(e.target.value) }} placeholder="https://shopee.ph/your-shop"
                   style={{display:"block",width:"100%",padding:"0.5rem 0.7rem",borderRadius:8,border:"1px solid var(--rim)",background:"var(--surface)",color:"var(--text)",fontSize:"0.9rem",boxSizing:"border-box"}} />
                 {form.shop_url && <a href={form.shop_url} target="_blank" rel="noreferrer" style={{fontSize:"0.68rem",color:"var(--orange)",marginTop:"0.3rem",display:"block"}}>→ ショップを開く</a>}
               </div>
@@ -472,7 +485,7 @@ export default function ActionLogPage({ uid: propUid }) {
           {editId && (
             <div style={{textAlign:"center",marginBottom:"0.5rem",fontSize:"0.78rem",color:"var(--orange)",fontWeight:700}}>
               ✏️ 編集モード中
-              <button onClick={() => { setEditId(null); setForm(emptyForm) }}
+              <button onClick={() => { setEditId(null); setForm(f => ({...emptyForm, shop_url: f.shop_url})) }}
                 style={{marginLeft:"1rem",padding:"0.2rem 0.6rem",borderRadius:6,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",fontSize:"0.72rem",cursor:"pointer"}}>キャンセル</button>
             </div>
           )}
