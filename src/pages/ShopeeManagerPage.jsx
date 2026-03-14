@@ -539,9 +539,10 @@ function CashflowTab({ incomeData, cashflowItems, onAddExpense, uid }) {
                     {item.type==="income" && (
                       <select value={item.currentStatus} onChange={e=>updateIncomeStatus(item.key, e.target.value)}
                         style={{ fontSize:10, padding:"1px 4px", borderRadius:6, border:"1px solid var(--rim)", background:"var(--surface)", color:"var(--text)", cursor:"pointer" }}>
-                        <option value="scheduled">📅 入金予定</option>
-                        <option value="payoneer">💵 Payoneer着金</option>
-                        <option value="completed">✅ 円着金済</option>
+                        <option value="scheduled">📅 To Release（入金予定）</option>
+                        <option value="released">✅ Released（Shopee確定）</option>
+                        <option value="payoneer">💵 Payoneer着金（USD）</option>
+                        <option value="completed">💴 円着金済</option>
                       </select>
                     )}
                     {/* Payoneer着金時のUSD金額入力 */}
