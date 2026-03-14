@@ -544,29 +544,45 @@ function CashflowTab({ incomeData, cashflowItems, onAddExpense, uid }) {
                         <option value="completed">✅ 円着金済</option>
                       </select>
                     )}
-                    {/* Payoneer着金時のレート入力 */}
+                    {/* Payoneer着金時のUSD金額入力 */}
                     {item.currentStatus==="payoneer" && (
-                      <span style={{ display:"flex", gap:4, alignItems:"center" }}>
-                        <span style={{ fontSize:10, color:"var(--dim2)" }}>着金レート:</span>
+                      <span style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
+                        <span style={{ fontSize:10, color:"var(--dim2)" }}>USD着金額:</span>
                         <input type="number" step="0.01"
-                          defaultValue={item.extraData?.payoneerRate||""}
-                          onBlur={e=>updateIncomeStatus(item.key,"payoneer",{payoneerRate:Number(e.target.value)})}
-                          placeholder="2.65" style={{ ...inp, width:60, fontSize:10, padding:"1px 4px" }} />
-                        <span style={{ fontSize:10, color:"var(--dim2)" }}>₱/JPY</span>
+                          defaultValue={item.extraData?.receivedUsd||""}
+                          onBlur={e=>updateIncomeStatus(item.key,"payoneer",{receivedUsd:Number(e.target.value),receivedUsdRate:item.extraData?.receivedUsdRate})}
+                          placeholder="12.50" style={{ ...inp, width:65, fontSize:10, padding:"1px 4px" }} />
+                        <span style={{ fontSize:10, color:"var(--dim2)" }}>USD / レート:</span>
+                        <input type="number" step="0.01"
+                          defaultValue={item.extraData?.receivedUsdRate||""}
+                          onBlur={e=>updateIncomeStatus(item.key,"payoneer",{receivedUsd:item.extraData?.receivedUsd,receivedUsdRate:Number(e.target.value)})}
+                          placeholder="150" style={{ ...inp, width:55, fontSize:10, padding:"1px 4px" }} />
+                        <span style={{ fontSize:10, color:"var(--dim2)" }}>¥/USD</span>
+                        {item.extraData?.receivedUsd && item.extraData?.receivedUsdRate && (
+                          <span style={{ fontSize:10, color:"#3b82f6", fontWeight:700 }}>
+                            ≈¥{Math.round(item.extraData.receivedUsd * item.extraData.receivedUsdRate).toLocaleString()}
+                          </span>
+                        )}
                       </span>
                     )}
                     {/* 円着金時の金額入力 */}
                     {item.currentStatus==="completed" && (
-                      <span style={{ display:"flex", gap:4, alignItems:"center" }}>
-                        <span style={{ fontSize:10, color:"var(--dim2)" }}>着金額:</span>
+                      <span style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
+                        <span style={{ fontSize:10, color:"var(--dim2)" }}>USD着金:</span>
+                        <span style={{ fontSize:10, fontWeight:700, color:"#3b82f6" }}>${item.extraData?.receivedUsd||"?"}</span>
+                        <span style={{ fontSize:10, color:"var(--dim2)" }}>→ 円着金額:</span>
                         <input type="number"
                           defaultValue={item.extraData?.receivedJpy||""}
-                          onBlur={e=>updateIncomeStatus(item.key,"completed",{receivedJpy:Number(e.target.value),payoneerRate:item.extraData?.payoneerRate})}
-                          placeholder="8000" style={{ ...inp, width:70, fontSize:10, padding:"1px 4px" }} />
+                          onBlur={e=>updateIncomeStatus(item.key,"completed",{
+                            receivedJpy:Number(e.target.value),
+                            receivedUsd:item.extraData?.receivedUsd,
+                            receivedUsdRate:item.extraData?.receivedUsdRate
+                          })}
+                          placeholder="18000" style={{ ...inp, width:70, fontSize:10, padding:"1px 4px" }} />
                         <span style={{ fontSize:10, color:"var(--dim2)" }}>¥</span>
-                        {item.extraData?.receivedJpy && item.extraData?.payoneerRate && (
-                          <span style={{ fontSize:10, color:((item.extraData.receivedJpy - item.amount * item.extraData.payoneerRate) >= 0)?"#22c55e":"#ef4444", fontWeight:700 }}>
-                            差損: {Math.round(item.extraData.receivedJpy - item.amount * item.extraData.payoneerRate).toLocaleString()}¥
+                        {item.extraData?.receivedJpy && item.extraData?.receivedUsd && item.extraData?.receivedUsdRate && (
+                          <span style={{ fontSize:10, color:((item.extraData.receivedJpy - item.extraData.receivedUsd * item.extraData.receivedUsdRate) >= 0)?"#22c55e":"#ef4444", fontWeight:700 }}>
+                            差損益: {Math.round(item.extraData.receivedJpy - item.extraData.receivedUsd * item.extraData.receivedUsdRate).toLocaleString()}¥
                           </span>
                         )}
                       </span>
