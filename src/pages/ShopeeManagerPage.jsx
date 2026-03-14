@@ -473,20 +473,20 @@ function CashflowTab({ incomeData, cashflowItems, onAddExpense, uid }) {
 
   const sectionBtns = [
     { key:"timeline", label:"📅 タイムライン" },
-    { key:"accounts", label:"🏦 口座管理" },
-    { key:"cards", label:"💳 クレカ管理" },
-    { key:"points", label:"✈️ マイル・ポイント" },
+    { key:"accounts", label:"🏦 口座" },
+    { key:"cards", label:"💳 クレカ" },
+    { key:"points", label:"✈️ マイル" },
   ]
 
   return (
     <div>
       {/* KPIカード */}
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
-        <KpiCard icon="⬆️" label="入金合計(₱)" value={`₱${totalIncome.toLocaleString()}`} color="#22c55e" />
-        <KpiCard icon="⬇️" label="仕入れ支払(₱)" value={`₱${totalExpense.toLocaleString()}`} color="#ef4444" />
-        <KpiCard icon="🏦" label="Payoneer(USD)" value={`$${Number(settings.payoneerUsd).toLocaleString()}`} color="#3b82f6" />
-        <KpiCard icon="💴" label="日本円口座" value={`¥${Number(settings.bankJpy).toLocaleString()}`} color="#a78bfa" />
-        <KpiCard icon="💳" label="買掛金合計(¥)" value={`¥${totalPayables.toLocaleString()}`} color="#f59e0b" />
+        <KpiCard icon="⬆️" label="入金(₱)" value={`₱${totalIncome.toLocaleString()}`} color="#22c55e" />
+        <KpiCard icon="⬇️" label="支払(₱)" value={`₱${totalExpense.toLocaleString()}`} color="#ef4444" />
+        <KpiCard icon="🏦" label="Payoneer $" value={`$${Number(settings.payoneerUsd).toLocaleString()}`} color="#3b82f6" />
+        <KpiCard icon="💴" label="円口座" value={`¥${Number(settings.bankJpy).toLocaleString()}`} color="#a78bfa" />
+        <KpiCard icon="💳" label="買掛金(¥)" value={`¥${totalPayables.toLocaleString()}`} color="#f59e0b" />
       </div>
 
       {/* セクション切替 */}
