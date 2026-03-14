@@ -1,5 +1,18 @@
 import { useState, useEffect } from "react"
 
+function UploadArea({ label, onUpload, uploaded, fileName }) {
+  return (
+    <label style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", border:"1.5px dashed var(--rim)", borderRadius:10, cursor:"pointer", background:"var(--surface)" }}>
+      <span style={{ fontSize:20 }}>{uploaded ? "✅" : "📂"}</span>
+      <div>
+        <div style={{ fontSize:12, fontWeight:700, color:uploaded ? "#22c55e" : "var(--dim2)" }}>{label}</div>
+        {fileName && <div style={{ fontSize:11, color:"var(--dim2)", marginTop:2 }}>{fileName}</div>}
+      </div>
+      <input type="file" accept=".xlsx,.xls" onChange={onUpload} style={{ display:"none" }} />
+    </label>
+  )
+}
+
 function KpiCard({ icon, label, value, sub, color }) {
   return (
     <div style={{ background:"var(--surface)", border:"1px solid var(--rim)", borderRadius:10, padding:"12px 16px", minWidth:120, flex:1 }}>
@@ -25,6 +38,39 @@ export default function ShippingPage({ uid, viewOnly }) {
   const [fxRate, setFxRate] = useState(0)
 
   useEffect(() => { if (uid) loadOrders() }, [uid])
+
+  async function handleOrderUpload(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    try {
+      const XLSX = await import("xlsx")
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf)
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1 })
+      const headerIdx = rows.findIndex(r => r.some(c => String(c||"").includes("Order ID")))
+      if (headerIdx < 0) { alert("注文レポートの形式が正しくありません"); return }
+      const headers = rows[headerIdx].map(h => String(h||"").trim())
+      const get = (row, ...names) => { for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i>=0 && row[i]!=null) return String(row[i]).trim() } return "" }
+      const parsed = rows.slice(headerIdx+1).filter(r => get(r,"Order ID")).map(r => ({
+        orderId: get(r,"Order ID"), orderDate: get(r,"Order Creation Date","Order Date"),
+        product: get(r,"Product Name","Item Name"), qty: Number(get(r,"Quantity"))||1,
+        total: Number(get(r,"Total Amount","Amount"))||0, status: get(r,"Order Status","Status"),
+        tracking: get(r,"Tracking Number","Tracking No"), shipTime: get(r,"Ship Time","Shipment Date"),
+        sku: get(r,"Parent SKU","SKU"),
+      }))
+      const { db } = await import("../lib/firebase")
+      const { doc, setDoc } = await import("firebase/firestore")
+      // ProfitManagerと同じ{uid}_ordersドキュメントに保存（共有データソース）
+      const docId = uid + "_orders"
+      await setDoc(doc(db, "shopee_orders", docId), {
+        userId: uid, orders: parsed, filename: file.name, uploadedAt: new Date()
+      })
+      setOrders(parsed)
+      setFileName(file.name)
+      alert("✅ " + parsed.length + "件の注文を読み込みました")
+    } catch(e) { alert("読み込みエラー: " + e.message) }
+  }
 
   async function loadOrders() {
     setLoading(true)
@@ -67,17 +113,20 @@ export default function ShippingPage({ uid, viewOnly }) {
 
   return (
     <div>
-      {/* データソース案内 */}
-      {fileName && (
-        <div style={{ marginBottom:16, padding:"8px 14px", background:"rgba(34,197,94,0.08)", borderRadius:8, border:"1px solid rgba(34,197,94,0.2)", fontSize:12, color:"#22c55e", fontWeight:600 }}>
-          ✅ データソース: {fileName}（ProfitManagerでアップロード済み）
-        </div>
-      )}
-      {!fileName && (
-        <div style={{ marginBottom:16, padding:"12px 16px", background:"rgba(249,115,22,0.08)", borderRadius:8, border:"1px solid rgba(249,115,22,0.2)", fontSize:13, color:"var(--orange)" }}>
-          📂 注文データがありません。<strong>💰 ProfitManager</strong> からXLSXをアップロードしてください。
-        </div>
-      )}
+      {/* アップロードエリア */}
+      <div style={{ marginBottom:16 }}>
+        <UploadArea
+          label={orders.length > 0 ? `再アップロード（現在: ${fileName||"未アップロード"}）` : "注文レポート XLSX（Order_all_xxxx.xlsx）"}
+          onUpload={handleOrderUpload}
+          uploaded={orders.length > 0}
+          fileName={fileName}
+        />
+        {orders.length > 0 && (
+          <div style={{ marginTop:6, fontSize:11, color:"var(--dim2)", paddingLeft:4 }}>
+            ※ ProfitManagerとデータを共有しています
+          </div>
+        )}
+      </div>
 
       {orders.length === 0 ? (
         <div className="card" style={{ padding:"2rem", textAlign:"center", color:"var(--dim2)" }}>
