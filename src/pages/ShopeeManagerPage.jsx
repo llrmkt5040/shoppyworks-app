@@ -28,7 +28,7 @@ function Badge({ status }) {
 
 function KpiCard({ icon, label, value, sub, color }) {
   return (
-    <div style={{ background:"#fff", borderRadius:12, padding:"16px 18px", boxShadow:"0 1px 4px rgba(0,0,0,0.07)", borderTop:`3px solid ${color}`, flex:1, minWidth:0 }}>
+    <div style={{ background:"var(--surface)", borderRadius:12, padding:"16px 18px", border:`1px solid var(--rim)`, borderTop:`3px solid ${color}`, flex:1, minWidth:0 }}>
       <div style={{ fontSize:20, marginBottom:6 }}>{icon}</div>
       <div style={{ fontSize:20, fontWeight:800, color:"#0f172a", lineHeight:1 }}>{value}</div>
       {sub && <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{sub}</div>}
@@ -53,7 +53,7 @@ function UploadArea({ label, onUpload, uploaded, fileName }) {
   return (
     <div onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)}
       onDrop={e=>{e.preventDefault();setDragOver(false);handleFile(e.dataTransfer.files[0])}}
-      style={{ border:`2px dashed ${dragOver?"#ee4d2d":uploaded?"#22c55e":"#cbd5e1"}`, borderRadius:10, padding:"20px", textAlign:"center", background:uploaded?"#f0fdf4":"#f8fafc", cursor:"pointer" }}>
+      style={{ border:`2px dashed ${dragOver?"#ee4d2d":uploaded?"#22c55e":"#cbd5e1"}`, borderRadius:10, padding:"20px", textAlign:"center", background:"var(--surface)", cursor:"pointer" }}>
       {uploaded ? (
         <>
           <div style={{ fontSize:24, marginBottom:4 }}>✅</div>
@@ -133,7 +133,7 @@ function ShippingTab({ orders, onUpload, fileName }) {
       <div style={{ marginBottom:12 }}>
         <UploadArea label={`再アップロード（現在: ${fileName||"未アップロード"}）`} onUpload={onUpload} uploaded={true} fileName={fileName} />
       </div>
-      <div style={{ marginBottom:8, padding:"8px 12px", background:"#f0fdf4", borderRadius:8, border:"1px solid #bbf7d0", fontSize:12, color:"#15803d", fontWeight:600 }}>
+      <div style={{ marginBottom:8, padding:"8px 12px", background:"rgba(34,197,94,0.1)", borderRadius:8, border:"1px solid rgba(34,197,94,0.3)", fontSize:12, color:"#22c55e", fontWeight:600 }}>
         ✅ ORDER IDが重複する場合は最新データで上書きされます（累計: {orders.length}件）
       </div>
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
@@ -145,14 +145,14 @@ function ShippingTab({ orders, onUpload, fileName }) {
       </div>
       <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
         {[{key:"all",label:"すべて"},{key:"To ship",label:"⚡出荷待ち"},{key:"Shipping",label:"🚚配送中"},{key:"Delivered",label:"✅配達済み"},{key:"Cancelled",label:"❌キャンセル"}].map(f=>(
-          <button key={f.key} onClick={()=>setFilter(f.key)} style={{ background:filter===f.key?"#0f172a":"#f1f5f9", color:filter===f.key?"#fff":"#475569", border:"none", borderRadius:8, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+          <button key={f.key} onClick={()=>setFilter(f.key)} style={{ background:filter===f.key?"var(--orange)":"var(--surface)", color:filter===f.key?"#fff":"var(--dim2)", border:"none", borderRadius:8, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
             {f.label} <span style={{opacity:0.7}}>{f.key==="all"?orders.length:counts[f.key]||0}</span>
           </button>
         ))}
       </div>
       <div style={{ overflowX:"auto" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-          <thead><tr style={{ background:"#f8fafc" }}>
+          <thead><tr style={{ background:"var(--surface)" }}>
             {["Order ID","注文日","商品名","数量","金額(₱)","ステータス","追跡番号","出荷日"].map(h=>(
               <th key={h} style={{ padding:"8px 10px", textAlign:"left", fontSize:11, fontWeight:700, color:"#94a3b8", borderBottom:"1px solid #f1f5f9", whiteSpace:"nowrap" }}>{h}</th>
             ))}
@@ -223,7 +223,7 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
         <KpiCard icon="💸" label="手数料率" value={`${feeRate}%`} sub="コミッション+SF+TF" color="#f59e0b" />
         <KpiCard icon="📈" label="粗利率" value={`${marginRate}%`} sub="入金÷売上" color="#8b5cf6" />
       </div>
-      <div style={{ background:"#fff", borderRadius:12, padding:18, boxShadow:"0 1px 4px rgba(0,0,0,0.07)" }}>
+      <div style={{ background:"var(--surface)", borderRadius:12, padding:18, border:"1px solid var(--rim)" }}>
         <div style={{ fontWeight:800, fontSize:14, color:"#0f172a", marginBottom:14 }}>💧 利益ウォーターフォール</div>
         {waterfall.map(item=>{
           const barW = totalPrice?Math.abs(item.value)/totalPrice*100:0
@@ -233,7 +233,7 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
                 <span style={{ color:"#475569" }}>{item.label}</span>
                 <span style={{ fontWeight:700, color:item.positive?"#16a34a":"#ef4444" }}>{item.positive?"+":""}₱{item.value.toLocaleString()}</span>
               </div>
-              <div style={{ background:"#f1f5f9", borderRadius:4, height:7 }}>
+              <div style={{ background:"var(--rim)", borderRadius:4, height:7 }}>
                 <div style={{ width:`${Math.min(barW,100)}%`, height:"100%", background:item.positive?"#3b82f6":"#f87171", borderRadius:4 }} />
               </div>
             </div>
@@ -250,7 +250,7 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
       </>)}
       {inventoryItems && inventoryItems.length > 0 && items.length > 0 && (() => {
         const costMap = {}
-        inventoryItems.forEach(i => { if(i.sku && i.costPhp > 0) costMap[i.sku] = { costPhp: Number(i.costPhp), name: i.name } })
+        inventoryItems.forEach(i => { const sku = i.internalSku || i.sku || ""; const costPhp = i.costPhp > 0 ? Number(i.costPhp) : (fxRate > 0 && i.unitPrice > 0 ? Math.round(Number(i.unitPrice) / fxRate * 10) / 10 : 0); if(sku && costPhp > 0) costMap[sku] = { costPhp, name: i.name } })
         const orderIdToSku = {}
         const orderIdToProduct = {}
         const orderIdToQty = {}
@@ -318,7 +318,7 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
             </div>
             {Object.keys(costMap).length === 0 && (
               <div style={{ marginTop:10, background:"#fef9c3", borderRadius:8, padding:"10px 14px", fontSize:12, color:"#92400e" }}>
-                ⚠️ 在庫棚卸メニューで仕入単価(₱)を登録すると粗利が自動計算されます
+                ⚠️ 在庫管理で仕入単価を登録すると粗利が自動計算されます
               </div>
             )}
           </div>
@@ -362,13 +362,13 @@ function CashflowTab({ incomeData, cashflowItems, onAddExpense }) {
         <KpiCard icon="💳" label="純キャッシュフロー" value={`₱${(totalIncome-totalExpense).toLocaleString()}`} color="#3b82f6" />
         <KpiCard icon="🏦" label="推定残高" value={`₱${balance.toLocaleString()}`} sub="累計" color="#8b5cf6" />
       </div>
-      <div style={{ background:"#fff", borderRadius:12, padding:18, boxShadow:"0 1px 4px rgba(0,0,0,0.07)" }}>
+      <div style={{ background:"var(--surface)", borderRadius:12, padding:18, border:"1px solid var(--rim)" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
           <div style={{ fontWeight:800, fontSize:14, color:"#0f172a" }}>📅 入出金タイムライン</div>
           <button onClick={()=>setShowAdd(!showAdd)} style={{ background:"#ee4d2d", color:"#fff", border:"none", borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer" }}>＋ 支払予定を追加</button>
         </div>
         {showAdd && (
-          <div style={{ background:"#f8fafc", borderRadius:10, padding:14, marginBottom:16, border:"1px solid #e2e8f0", display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
+          <div style={{ background:"var(--surface)", borderRadius:10, padding:14, marginBottom:16, border:"1px solid var(--rim)", display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
             {[{key:"date",label:"日付",type:"date"},{key:"label",label:"内容",type:"text",placeholder:"仕入れ支払"},{key:"amount",label:"金額(₱)",type:"number",placeholder:"8500"},{key:"note",label:"メモ",type:"text",placeholder:"備考"}].map(f=>(
               <div key={f.key} style={{ display:"flex", flexDirection:"column", gap:3 }}>
                 <label style={{ fontSize:11, fontWeight:700, color:"#64748b" }}>{f.label}</label>
@@ -376,7 +376,7 @@ function CashflowTab({ incomeData, cashflowItems, onAddExpense }) {
                   style={{ border:"1px solid #e2e8f0", borderRadius:7, padding:"5px 10px", fontSize:12, width:f.key==="label"?160:f.key==="note"?140:90 }} />
               </div>
             ))}
-            <button onClick={handleAdd} style={{ background:"#0f172a", color:"#fff", border:"none", borderRadius:8, padding:"7px 16px", fontSize:12, fontWeight:700, cursor:"pointer" }}>追加</button>
+            <button onClick={handleAdd} style={{ background:"var(--orange)", color:"#fff", border:"none", borderRadius:8, padding:"7px 16px", fontSize:12, fontWeight:700, cursor:"pointer" }}>追加</button>
           </div>
         )}
         {timeline.length===0 ? (
@@ -402,7 +402,7 @@ function CashflowTab({ incomeData, cashflowItems, onAddExpense }) {
                 {item.type==="income"?"+":"-"}₱{Math.abs(item.amount).toLocaleString()}
               </div>
             </div>
-            <div style={{ width:90, flexShrink:0, textAlign:"right", padding:"4px 10px", background:"#f8fafc", borderRadius:8 }}>
+            <div style={{ width:90, flexShrink:0, textAlign:"right", padding:"4px 10px", background:"var(--surface)", borderRadius:8, border:"1px solid var(--rim)" }}>
               <div style={{ fontSize:10, color:"#94a3b8" }}>残高</div>
               <div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>₱{item.balance.toLocaleString()}</div>
             </div>
@@ -417,7 +417,7 @@ function CashflowTab({ incomeData, cashflowItems, onAddExpense }) {
 export default function ShopeeManagerPage({ uid: propUid }) {
   const { user } = useAuth()
   const effectiveUid = propUid || user?.uid
-  const [tab, setTab] = useState("shipping")
+  const [tab, setTab] = useState("profit")
   const [orders, setOrders] = useState([])
   const [inventoryItems, setInventoryItems] = useState([])
   const [fxRate, setFxRate] = useState(0)
@@ -452,8 +452,13 @@ export default function ShopeeManagerPage({ uid: propUid }) {
           const latest = incSnap.docs.sort((a,b)=>(b.data().uploadedAt?.seconds||0)-(a.data().uploadedAt?.seconds||0))[0].data()
           setIncomeData({ items:latest.items||[], summary:latest.summary||{} }); setIncomeFileName(latest.fileName||"")
         }
+        const relSnap = await getDocs(query(collection(db,"shopee_income_released"),where("userId","==",effectiveUid)))
+        if (!relSnap.empty) {
+          const latestRel = relSnap.docs.sort((a,b)=>(b.data().uploadedAt?.seconds||0)-(a.data().uploadedAt?.seconds||0))[0].data()
+          setReleasedData({ items:latestRel.items||[], summary:latestRel.summary||{} }); setReleasedFileName(latestRel.fileName||"")
+        }
         const cfSnap = await getDocs(query(collection(db,"cashflow_items"),where("userId","==",effectiveUid)))
-        const invSnap = await getDocs(query(collection(db,"inventory_items"),where("uid","==",effectiveUid)))
+        const invSnap = await getDocs(query(collection(db,"physical_products"),where("uid","==",effectiveUid)))
         setInventoryItems(invSnap.docs.map(d=>({id:d.id,...d.data()})))
         const fxSnap = await getDoc(docRef(db,"fx_rates",effectiveUid))
         if(fxSnap.exists()) setFxRate(Number(fxSnap.data().rate_php_jpy)||0)
@@ -523,20 +528,20 @@ export default function ShopeeManagerPage({ uid: propUid }) {
           <span style={{ fontSize:22 }}>📂</span>
           <h1 style={{ margin:0, fontSize:20, fontWeight:800, color:"#0f172a" }}>Shopee 一元管理</h1>
           <span style={{ background:"#ee4d2d", color:"#fff", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20 }}>Shopee Philippines</span>
-          {saving&&<span style={{ background:"#f0fdf4", color:"#15803d", fontSize:11, fontWeight:600, padding:"2px 10px", borderRadius:20 }}>💾 保存中...</span>}
+          {saving&&<span style={{ background:"rgba(34,197,94,0.1)", color:"#22c55e", fontSize:11, fontWeight:600, padding:"2px 10px", borderRadius:20 }}>💾 保存中...</span>}
         </div>
         <p style={{ margin:0, color:"#64748b", fontSize:13 }}>出荷・利益・資金繰りを一画面で管理。在庫棚卸の仕入れ原価と連動して粗利を自動計算します。</p>
       </div>
-      <div style={{ background:"#fff", borderRadius:14, boxShadow:"0 1px 4px rgba(0,0,0,0.07)", overflow:"hidden" }}>
+      <div style={{ background:"var(--surface)", borderRadius:14, border:"1px solid var(--rim)", overflow:"hidden" }}>
         <div style={{ display:"flex", borderBottom:"1px solid #f1f5f9", padding:"0 20px" }}>
-          {[{id:"shipping",icon:"📦",label:"出荷管理"},{id:"profit",icon:"💰",label:"利益管理"},{id:"cashflow",icon:"💳",label:"資金繰り管理"}].map(t=>(
+          {[{id:"profit",icon:"💰",label:"利益管理"},{id:"cashflow",icon:"💳",label:"資金繰り管理"}].map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{ padding:"14px 20px", border:"none", background:"none", cursor:"pointer", fontSize:14, fontWeight:700, color:tab===t.id?"#ee4d2d":"#64748b", borderBottom:tab===t.id?"2px solid #ee4d2d":"2px solid transparent", display:"flex", alignItems:"center", gap:6 }}>
               {t.icon} {t.label}
             </button>
           ))}
         </div>
         <div style={{ padding:20 }}>
-          {tab==="shipping"&&<ShippingTab orders={orders} onUpload={handleOrderUpload} fileName={orderFileName} />}
+          
           {tab==="profit"&&<ProfitTab incomeData={incomeData} onUpload={handleIncomeUpload} fileName={incomeFileName} releasedData={releasedData} onReleasedUpload={handleReleasedUpload} releasedFileName={releasedFileName} inventoryItems={inventoryItems} fxRate={fxRate} orders={orders} />}
           {tab==="cashflow"&&<CashflowTab incomeData={incomeData} cashflowItems={cashflowItems} onAddExpense={handleAddExpense} />}
         </div>

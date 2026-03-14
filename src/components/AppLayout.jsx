@@ -1,3 +1,15 @@
+
+function ComingSoonPage({ title, sub, icon }) {
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:400, gap:"1rem" }}>
+      <div style={{ fontSize:"3rem" }}>{icon}</div>
+      <div style={{ fontWeight:800, fontSize:"1.3rem", color:"var(--text)" }}>{title}</div>
+      <div style={{ fontSize:"0.85rem", color:"var(--dim2)" }}>{sub}</div>
+      <div style={{ fontSize:"0.78rem", color:"var(--dim2)", background:"rgba(255,255,255,0.05)", padding:"0.5rem 1.2rem", borderRadius:8, border:"1px solid var(--rim)" }}>🚧 準備中</div>
+    </div>
+  )
+}
+
 import { useState, useEffect } from "react"
 import NoticePage from "../pages/NoticePage"
 import ManualPage from "../pages/ManualPage"
@@ -8,6 +20,8 @@ import DashboardPage from "../pages/DashboardPage"
 import AnalyzerPage from "../pages/AnalyzerPage"
 import ActionLogPage from "../pages/ActionLogPage"
 import InventoryPage from "../pages/InventoryPage"
+import ShippingPage from "../pages/ShippingPage"
+import BreakEvenPage from "../pages/BreakEvenPage"
 import RequestsPage from "../pages/RequestsPage"
 import ShopeeManagerPage from "../pages/ShopeeManagerPage"
 import MassUpdatePage from "../pages/MassUpdatePage"
@@ -19,22 +33,27 @@ import CockpitPage from "../pages/CockpitPage"
 const INSTRUCTOR_EMAIL = "tamaniha.hitoiki@gmail.com"
 
 const NAV = [
-  { id: "_mgmt",         icon: "",    label: "プロジェクト管理",   sub: "",           section: "header", instructorOnly: true },
-  { id: "cockpit",       icon: "🎓", label: "講師コクピット",      sub: "受講生管理", instructorOnly: true },
-  { id: "dashboard",     icon: "📈", label: "Dashboard",          sub: "数値管理" },
-  { id: "notice",        icon: "📢", label: "お知らせ",             sub: "更新・予定" },
-  { id: "manual",        icon: "📖", label: "マニュアル",           sub: "操作ガイド" },
-  { id: "_daily",        icon: "",    label: "日次業務",            sub: "",           section: "header" },
-  { id: "actionlog",     icon: "📅", label: "ShopeeDiary",         sub: "日次記録" },
-  { id: "analyzer",      icon: "📊", label: "ShopeeAnalyzer",      sub: "商品分析" },
-  { id: "shopee",        icon: "📂", label: "ShopeeManager",       sub: "注文管理" },
-  { id: "_spot",         icon: "",    label: "都度業務",            sub: "",           section: "header" },
-  { id: "inventory",     icon: "📦", label: "ShopeeStockManager",  sub: "在庫棚卸" },
-  { id: "requests",      icon: "🛍️", label: "PasabuyManager",      sub: "御用聞き" },
-  { id: "_weekly",       icon: "",    label: "週次業務",            sub: "",           section: "header" },
-  { id: "massupdate",    icon: "🔄", label: "MassUpdate管理",      sub: "出品管理" },
-  { id: "accounthealth", icon: "🏥", label: "アカウントヘルス",    sub: "健全性管理" },
-  { id: "settings",      icon: "⚙️", label: "設定",                sub: "" },
+  { id: "_mgmt",         icon: "",    label: "Project Management", sub: "",           section: "header", instructorOnly: true },
+  { id: "cockpit",       icon: "🎓", label: "Cockpit",             sub: "受講生管理", instructorOnly: true },
+  { id: "dashboard",     icon: "📈", label: "Dashboard",           sub: "数値管理" },
+  { id: "notice",        icon: "📢", label: "Notice",              sub: "更新・予定" },
+  { id: "manual",        icon: "📖", label: "Manual",              sub: "操作ガイド" },
+  { id: "_sales",        icon: "",    label: "Sales Management",   sub: "",           section: "header" },
+  { id: "actionlog",     icon: "📅", label: "ShopeeDiary",        sub: "日次記録" },
+  { id: "shipping",      icon: "📋", label: "ShippingManager",    sub: "出荷管理" },
+  { id: "shopee",        icon: "💰", label: "ProfitManager",      sub: "利益・入金" },
+  { id: "requests",      icon: "🛍️", label: "PasabuyManager",     sub: "御用聞き" },
+  { id: "_listing",      icon: "",    label: "Listing Management", sub: "",           section: "header" },
+  { id: "massupdate",    icon: "🏪", label: "ShopeeListing",      sub: "出品・更新" },
+  { id: "accounthealth", icon: "🏥", label: "AccountHealth",      sub: "健全性管理" },
+  { id: "_stock",        icon: "",    label: "Stock Management",   sub: "",           section: "header" },
+  { id: "inventory",     icon: "📦", label: "StockManager",       sub: "商品マスタ" },
+  { id: "analyzer",      icon: "📊", label: "ShopeeAnalyzer",     sub: "商品分析" },
+  { id: "_tools",        icon: "",    label: "Analysis & Tools",   sub: "",           section: "header" },
+  { id: "competitor",    icon: "🔍", label: "CompetitorWatch",    sub: "競合セラー管理" },
+  { id: "breakeven",     icon: "🧮", label: "BreakEvenCalc",      sub: "損益分岐計算機" },
+  { id: "_config",       icon: "",    label: "Configuration",      sub: "",           section: "header" },
+  { id: "settings",      icon: "⚙️", label: "Settings",           sub: "設定" },
 ]
 
 function ViewOnlyBanner() {
@@ -229,6 +248,9 @@ export default function AppLayout() {
       case "inventory":     return <InventoryPage uid={uid} viewOnly={viewOnly} />
       case "requests":      return <RequestsPage uid={uid} viewOnly={viewOnly} />
       case "shopee":        return <ShopeeManagerPage uid={uid} viewOnly={viewOnly} />
+      case "shipping":      return <ShippingPage uid={uid} viewOnly={viewOnly} />
+      case "competitor":    return <ComingSoonPage title="CompetitorWatch" sub="競合セラー管理" icon="🔍" />
+      case "breakeven":     return <BreakEvenPage uid={uid} />
       case "massupdate":    return <MassUpdatePage uid={uid} viewOnly={viewOnly} />
       case "accounthealth": return <AccountHealthPage uid={uid} viewOnly={viewOnly} />
       case "settings":      return <SettingsPage uid={uid} profile={profile} />

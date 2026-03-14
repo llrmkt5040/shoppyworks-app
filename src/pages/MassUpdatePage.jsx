@@ -115,7 +115,7 @@ export default function MassUpdatePage({ uid: propUid }) {
       if (list.length > 0) {
         await loadHistoryItems(list[0])
       }
-      const invSnap = await getDocs(collection(db, 'inventory_items'))
+      const invSnap = await getDocs(collection(db, 'physical_products'))
       const invList = invSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.uid === uid)
       setInventory(invList)
       await loadProductDB()
@@ -308,9 +308,9 @@ export default function MassUpdatePage({ uid: propUid }) {
   }
 
   function autoFillFromInventory() {
-    if (inventory.length === 0) return alert('在庫棚卸データがありません。先にShopeeStockManagerで登録してください。')
+    if (inventory.length === 0) return alert('在庫管理で商品を登録してください。')
     const skuMap = {}
-    inventory.forEach(item => { if (item.sku) skuMap[item.sku.toLowerCase()] = item })
+    inventory.forEach(item => { const skuKey = (item.internalSku || item.sku || "").toLowerCase(); if (skuKey) skuMap[skuKey] = item })
     let filled = 0
     setEditMap(prev => {
       const next = { ...prev }
