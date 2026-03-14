@@ -34,6 +34,7 @@ export default function ShippingPage({ uid, viewOnly }) {
   const [fileName, setFileName] = useState("")
   const [filter, setFilter] = useState("all")
   const [loading, setLoading] = useState(true)
+  const [fxRate, setFxRate] = useState(0)
 
   useEffect(() => { if (uid) loadOrders() }, [uid])
 
@@ -41,7 +42,12 @@ export default function ShippingPage({ uid, viewOnly }) {
     setLoading(true)
     try {
       const { db } = await import("../lib/firebase")
-      const { collection, getDocs } = await import("firebase/firestore")
+      const { collection, getDocs, doc, getDoc } = await import("firebase/firestore")
+      // 為替レート取得
+      try {
+        const fxSnap = await getDoc(doc(db, "fx_rates", uid))
+        if (fxSnap.exists()) setFxRate(Number(fxSnap.data().rate_php_jpy) || 0)
+      } catch(e) {}
       const snap = await getDocs(collection(db, "shopee_orders"))
       const myDocs = snap.docs.filter(d => d.data().userId === uid)
       if (myDocs.length === 0) { setLoading(false); return }
@@ -111,7 +117,7 @@ export default function ShippingPage({ uid, viewOnly }) {
             <KpiCard icon="⚡" label="出荷待ち" value={(counts["To ship"]||0)+"件"} color="#eab308" />
             <KpiCard icon="🚚" label="配送中" value={(counts["Shipping"]||0)+"件"} color="#3b82f6" />
             <KpiCard icon="❌" label="キャンセル率" value={cancelRate+"%"} sub={(counts["Cancelled"]||0)+"/"+orders.length+"件"} color="#ef4444" />
-            <KpiCard icon="💰" label="売上合計" value={"₱"+totalRevenue.toLocaleString()} color="#22c55e" />
+            <KpiCard icon="💰" label="売上合計" value={"₱"+totalRevenue.toLocaleString()} sub={fxRate>0?"≈¥"+Math.round(totalRevenue*fxRate).toLocaleString():""} color="#22c55e" />
           </div>
 
           {/* フィルタ */}
