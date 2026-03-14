@@ -328,10 +328,104 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
   )
 }
 
-function CashflowTab({ incomeData, cashflowItems, onAddExpense }) {
+function CashflowTab({ incomeData, cashflowItems, onAddExpense, uid }) {
   const { items } = incomeData
+  const [activeSection, setActiveSection] = useState("timeline") // timeline | accounts | cards | points
+  const [settings, setSettings] = useState({ payoneerUsd:0, payoneerJpy:0, bankJpy:0 })
+  const [cards, setCards] = useState([])
+  const [payables, setPayables] = useState([])
+  const [points, setPoints] = useState([])
+  const [incomeStatuses, setIncomeStatuses] = useState({})
+  const [showAddCard, setShowAddCard] = useState(false)
+  const [showAddPayable, setShowAddPayable] = useState(false)
+  const [showAddPoint, setShowAddPoint] = useState(false)
+  const [newCard, setNewCard] = useState({ name:"", limit:"", closingDay:"", paymentDay:"", color:"#3b82f6" })
+  const [newPayable, setNewPayable] = useState({ cardId:"", date:"", label:"", amountJpy:"", note:"" })
+  const [newPoint, setNewPoint] = useState({ name:"", points:"", expiry:"", note:"" })
+  const [editBalance, setEditBalance] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [newItem, setNewItem] = useState({ date:"", label:"", amount:"", note:"" })
+  const effectiveUid = uid
+
+  useEffect(() => { if (effectiveUid) loadSettings() }, [effectiveUid])
+
+  async function loadSettings() {
+    try {
+      const { db } = await import("../lib/firebase")
+      const { doc, getDoc, collection, query, where, getDocs } = await import("firebase/firestore")
+      const snap = await getDoc(doc(db, "cashflow_settings", effectiveUid))
+      if (snap.exists()) {
+        const d = snap.data()
+        setSettings({ payoneerUsd: d.payoneerUsd||0, payoneerJpy: d.payoneerJpy||0, bankJpy: d.bankJpy||0 })
+        setCards(d.cards||[])
+        setPoints(d.points||[])
+      }
+      const pSnap = await getDocs(query(collection(db,"cashflow_payables"),where("uid","==",effectiveUid)))
+      setPayables(pSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.date.localeCompare(b.date)))
+      const iSnap = await getDocs(query(collection(db,"cashflow_income_status"),where("uid","==",effectiveUid)))
+      const statusMap = {}
+      iSnap.docs.forEach(d=>{ statusMap[d.data().key] = d.data() })
+      setIncomeStatuses(statusMap)
+    } catch(e) { console.error(e) }
+  }
+
+  async function saveSettings(newSettings) {
+    try {
+      const { db } = await import("../lib/firebase")
+      const { doc, setDoc } = await import("firebase/firestore")
+      await setDoc(doc(db,"cashflow_settings",effectiveUid), { ...newSettings, cards, points, updatedAt:new Date().toISOString() }, { merge:true })
+    } catch(e) { console.error(e) }
+  }
+
+  async function saveCards(newCards) {
+    try {
+      const { db } = await import("../lib/firebase")
+      const { doc, setDoc } = await import("firebase/firestore")
+      await setDoc(doc(db,"cashflow_settings",effectiveUid), { cards:newCards }, { merge:true })
+    } catch(e) { console.error(e) }
+  }
+
+  async function savePoints(newPoints) {
+    try {
+      const { db } = await import("../lib/firebase")
+      const { doc, setDoc } = await import("firebase/firestore")
+      await setDoc(doc(db,"cashflow_settings",effectiveUid), { points:newPoints }, { merge:true })
+    } catch(e) { console.error(e) }
+  }
+
+  async function addPayable() {
+    if (!newPayable.date||!newPayable.label||!newPayable.amountJpy) return
+    try {
+      const { db } = await import("../lib/firebase")
+      const { collection, addDoc } = await import("firebase/firestore")
+      await addDoc(collection(db,"cashflow_payables"), { ...newPayable, uid:effectiveUid, amountJpy:Number(newPayable.amountJpy), createdAt:new Date().toISOString() })
+      setNewPayable({ cardId:"", date:"", label:"", amountJpy:"", note:"" })
+      setShowAddPayable(false)
+      loadSettings()
+    } catch(e) { alert("エラー: "+e.message) }
+  }
+
+  async function deletePayable(id) {
+    if (!confirm("削除しますか？")) return
+    try {
+      const { db } = await import("../lib/firebase")
+      const { doc, deleteDoc } = await import("firebase/firestore")
+      await deleteDoc(doc(db,"cashflow_payables",id))
+      loadSettings()
+    } catch(e) { alert("エラー: "+e.message) }
+  }
+
+  async function updateIncomeStatus(key, status, extraData={}) {
+    try {
+      const { db } = await import("../lib/firebase")
+      const { doc, setDoc } = await import("firebase/firestore")
+      const docId = effectiveUid + "_" + key.replace(/[^a-zA-Z0-9]/g,"_")
+      await setDoc(doc(db,"cashflow_income_status",docId), { uid:effectiveUid, key, status, ...extraData, updatedAt:new Date().toISOString() })
+      setIncomeStatuses(prev => ({ ...prev, [key]: { status, ...extraData } }))
+    } catch(e) { console.error(e) }
+  }
+
+  // 入金データ集計
   const incomeByDate = {}
   items.forEach(item => {
     const d = item.releaseDate||item.orderDate
@@ -340,79 +434,435 @@ function CashflowTab({ incomeData, cashflowItems, onAddExpense }) {
     incomeByDate[d].amount += item.toRelease
     incomeByDate[d].count++
   })
+
+  const incomeItems = Object.entries(incomeByDate).map(([date,v]) => {
+    const key = date
+    const currentStatus = incomeStatuses[key]?.status || (v.status==="Released"?"released":"scheduled")
+    return { date, key, type:"income", label:"Shopee入金", amount:v.amount, count:v.count, shopeeStatus:v.status, currentStatus, extraData: incomeStatuses[key]||{} }
+  })
+
+  // クレカ引落集計
+  const paymentsByDate = {}
+  payables.forEach(p => {
+    const card = cards.find(c=>c.id===p.cardId)
+    if (!card) return
+    const payDate = getPaymentDate(p.date, card.closingDay, card.paymentDay)
+    if (!paymentsByDate[payDate]) paymentsByDate[payDate] = { amount:0, cardName:card.name, items:[] }
+    paymentsByDate[payDate].amount += p.amountJpy
+    paymentsByDate[payDate].items.push(p)
+  })
+
   const allItems = [
-    ...Object.entries(incomeByDate).map(([date,v])=>({ date, type:"income", label:`Shopee入金${v.status==="Released"?"(入金済)":"(入金予定)"}`, amount:v.amount, count:v.count, status:v.status==="Released"?"released":"scheduled" })),
-    ...cashflowItems.map(c=>({...c, type:"expense"}))
+    ...incomeItems,
+    ...cashflowItems.map(c=>({...c, type:"expense_php"})),
   ].sort((a,b)=>a.date.localeCompare(b.date))
-  let balance = 0
-  const timeline = allItems.map(item=>{ balance+=item.type==="income"?item.amount:-Math.abs(item.amount); return {...item,balance} })
-  const totalIncome = allItems.filter(i=>i.type==="income").reduce((s,i)=>s+i.amount,0)
-  const totalExpense = allItems.filter(i=>i.type==="expense").reduce((s,i)=>s+Math.abs(i.amount),0)
-  const handleAdd = () => {
-    if (!newItem.date||!newItem.label||!newItem.amount) return
-    onAddExpense({...newItem, amount:Number(newItem.amount)})
-    setNewItem({date:"",label:"",amount:"",note:""})
-    setShowAdd(false)
-  }
+
+  const totalIncome = incomeItems.reduce((s,i)=>s+i.amount,0)
+  const totalExpense = cashflowItems.reduce((s,i)=>s+Math.abs(i.amount),0)
+  const totalPayables = payables.reduce((s,p)=>s+p.amountJpy,0)
+
+  // クレカ別買掛金集計
+  const payablesByCard = {}
+  payables.forEach(p => {
+    if (!payablesByCard[p.cardId]) payablesByCard[p.cardId] = 0
+    payablesByCard[p.cardId] += p.amountJpy
+  })
+
+  const inp = { padding:"0.45rem 0.7rem", borderRadius:8, border:"1px solid var(--rim)", background:"var(--surface)", color:"var(--text)", fontSize:"0.82rem", boxSizing:"border-box" }
+  const lbl = { fontSize:"0.62rem", fontWeight:700, color:"var(--dim2)", display:"block", marginBottom:"0.2rem" }
+
+  const sectionBtns = [
+    { key:"timeline", label:"📅 タイムライン" },
+    { key:"accounts", label:"🏦 口座管理" },
+    { key:"cards", label:"💳 クレカ管理" },
+    { key:"points", label:"✈️ マイル・ポイント" },
+  ]
+
   return (
     <div>
+      {/* KPIカード */}
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
-        <KpiCard icon="⬆️" label="入金合計" value={`₱${totalIncome.toLocaleString()}`} color="#22c55e" />
-        <KpiCard icon="⬇️" label="仕入れ支払" value={`₱${totalExpense.toLocaleString()}`} color="#ef4444" />
-        <KpiCard icon="💳" label="純キャッシュフロー" value={`₱${(totalIncome-totalExpense).toLocaleString()}`} color="#3b82f6" />
-        <KpiCard icon="🏦" label="推定残高" value={`₱${balance.toLocaleString()}`} sub="累計" color="#8b5cf6" />
+        <KpiCard icon="⬆️" label="入金合計(₱)" value={`₱${totalIncome.toLocaleString()}`} color="#22c55e" />
+        <KpiCard icon="⬇️" label="仕入れ支払(₱)" value={`₱${totalExpense.toLocaleString()}`} color="#ef4444" />
+        <KpiCard icon="🏦" label="Payoneer(USD)" value={`$${Number(settings.payoneerUsd).toLocaleString()}`} color="#3b82f6" />
+        <KpiCard icon="💴" label="日本円口座" value={`¥${Number(settings.bankJpy).toLocaleString()}`} color="#a78bfa" />
+        <KpiCard icon="💳" label="買掛金合計(¥)" value={`¥${totalPayables.toLocaleString()}`} color="#f59e0b" />
       </div>
-      <div style={{ background:"var(--surface)", borderRadius:12, padding:18, border:"1px solid var(--rim)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-          <div style={{ fontWeight:800, fontSize:14, color:"var(--text)" }}>📅 入出金タイムライン</div>
-          <button onClick={()=>setShowAdd(!showAdd)} style={{ background:"#ee4d2d", color:"#fff", border:"none", borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer" }}>＋ 支払予定を追加</button>
+
+      {/* セクション切替 */}
+      <div style={{ display:"flex", gap:4, marginBottom:16, flexWrap:"wrap" }}>
+        {sectionBtns.map(s => (
+          <button key={s.key} onClick={()=>setActiveSection(s.key)}
+            style={{ padding:"0.4rem 0.9rem", borderRadius:8, border:"none", background:activeSection===s.key?"var(--orange)":"var(--surface)", color:activeSection===s.key?"#fff":"var(--dim2)", fontSize:"0.78rem", fontWeight:activeSection===s.key?700:400, cursor:"pointer" }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ===== タイムライン ===== */}
+      {activeSection === "timeline" && (
+        <div style={{ background:"var(--surface)", borderRadius:12, padding:18, border:"1px solid var(--rim)" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+            <div style={{ fontWeight:800, fontSize:14 }}>📅 入出金タイムライン</div>
+            <button onClick={()=>setShowAdd(!showAdd)} style={{ background:"#ee4d2d", color:"#fff", border:"none", borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer" }}>＋ 支払予定を追加</button>
+          </div>
+          {showAdd && (
+            <div style={{ background:"var(--surface)", borderRadius:10, padding:14, marginBottom:16, border:"1px solid var(--rim)", display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
+              {[{key:"date",label:"日付",type:"date"},{key:"label",label:"内容",type:"text",placeholder:"仕入れ支払"},{key:"amount",label:"金額(₱)",type:"number",placeholder:"8500"},{key:"note",label:"メモ",type:"text",placeholder:"備考"}].map(f=>(
+                <div key={f.key} style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                  <label style={{ fontSize:11, fontWeight:700, color:"var(--dim2)" }}>{f.label}</label>
+                  <input type={f.type} value={newItem[f.key]} placeholder={f.placeholder||""} onChange={e=>setNewItem(n=>({...n,[f.key]:e.target.value}))}
+                    style={{ ...inp, width:f.key==="label"?160:f.key==="note"?140:90 }} />
+                </div>
+              ))}
+              <button onClick={()=>{ if(!newItem.date||!newItem.label||!newItem.amount) return; onAddExpense({...newItem,amount:Number(newItem.amount)}); setNewItem({date:"",label:"",amount:"",note:""}); setShowAdd(false) }}
+                style={{ background:"var(--orange)", color:"#fff", border:"none", borderRadius:8, padding:"7px 16px", fontSize:12, fontWeight:700, cursor:"pointer" }}>追加</button>
+            </div>
+          )}
+          {allItems.length===0 ? (
+            <div style={{ textAlign:"center", padding:"30px 0", color:"var(--dim2)", fontSize:13 }}>MyIncomeをアップロードすると入金予定が自動表示されます</div>
+          ) : allItems.map((item,i)=>(
+            <div key={i} style={{ borderBottom:i<allItems.length-1?"1px solid var(--rim)":"none", opacity:item.currentStatus==="completed"?0.4:1 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0" }}>
+                <div style={{ width:60, flexShrink:0 }}>
+                  <div style={{ fontSize:12, fontWeight:700 }}>{item.date.slice(5).replace("-","/")}</div>
+                </div>
+                <div style={{ width:32, height:32, borderRadius:"50%", flexShrink:0, background:item.type==="income"?"rgba(34,197,94,0.15)":"rgba(239,68,68,0.15)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>
+                  {item.type==="income"?"⬆️":"⬇️"}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:600 }}>{item.label}</div>
+                  <div style={{ fontSize:11, color:"var(--dim2)", display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+                    {item.count && <span>{item.count}件分</span>}
+                    {item.note && <span>{item.note}</span>}
+                    {/* 入金ステータスバッジ */}
+                    {item.type==="income" && (
+                      <select value={item.currentStatus} onChange={e=>updateIncomeStatus(item.key, e.target.value)}
+                        style={{ fontSize:10, padding:"1px 4px", borderRadius:6, border:"1px solid var(--rim)", background:"var(--surface)", color:"var(--text)", cursor:"pointer" }}>
+                        <option value="scheduled">📅 入金予定</option>
+                        <option value="payoneer">💵 Payoneer着金</option>
+                        <option value="completed">✅ 円着金済</option>
+                      </select>
+                    )}
+                    {/* Payoneer着金時のレート入力 */}
+                    {item.currentStatus==="payoneer" && (
+                      <span style={{ display:"flex", gap:4, alignItems:"center" }}>
+                        <span style={{ fontSize:10, color:"var(--dim2)" }}>着金レート:</span>
+                        <input type="number" step="0.01"
+                          defaultValue={item.extraData?.payoneerRate||""}
+                          onBlur={e=>updateIncomeStatus(item.key,"payoneer",{payoneerRate:Number(e.target.value)})}
+                          placeholder="2.65" style={{ ...inp, width:60, fontSize:10, padding:"1px 4px" }} />
+                        <span style={{ fontSize:10, color:"var(--dim2)" }}>₱/JPY</span>
+                      </span>
+                    )}
+                    {/* 円着金時の金額入力 */}
+                    {item.currentStatus==="completed" && (
+                      <span style={{ display:"flex", gap:4, alignItems:"center" }}>
+                        <span style={{ fontSize:10, color:"var(--dim2)" }}>着金額:</span>
+                        <input type="number"
+                          defaultValue={item.extraData?.receivedJpy||""}
+                          onBlur={e=>updateIncomeStatus(item.key,"completed",{receivedJpy:Number(e.target.value),payoneerRate:item.extraData?.payoneerRate})}
+                          placeholder="8000" style={{ ...inp, width:70, fontSize:10, padding:"1px 4px" }} />
+                        <span style={{ fontSize:10, color:"var(--dim2)" }}>¥</span>
+                        {item.extraData?.receivedJpy && item.extraData?.payoneerRate && (
+                          <span style={{ fontSize:10, color:((item.extraData.receivedJpy - item.amount * item.extraData.payoneerRate) >= 0)?"#22c55e":"#ef4444", fontWeight:700 }}>
+                            差損: {Math.round(item.extraData.receivedJpy - item.amount * item.extraData.payoneerRate).toLocaleString()}¥
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ textAlign:"right", flexShrink:0 }}>
+                  <div style={{ fontSize:14, fontWeight:800, color:item.type==="income"?"#22c55e":"#ef4444" }}>
+                    {item.type==="income"?"+":"-"}₱{Math.abs(item.amount).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {/* クレカ引落予定 */}
+          {Object.entries(paymentsByDate).length > 0 && (
+            <div style={{ marginTop:16, borderTop:"2px solid var(--rim)", paddingTop:12 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:"#f59e0b", marginBottom:8 }}>💳 クレカ引落予定</div>
+              {Object.entries(paymentsByDate).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,v],i)=>(
+                <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--rim)" }}>
+                  <div>
+                    <div style={{ fontSize:12, fontWeight:700 }}>{date.slice(5).replace("-","/")} 引落</div>
+                    <div style={{ fontSize:11, color:"var(--dim2)" }}>{v.cardName} ({v.items.length}件)</div>
+                  </div>
+                  <div style={{ fontSize:13, fontWeight:800, color:"#f59e0b" }}>¥{v.amount.toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        {showAdd && (
-          <div style={{ background:"var(--surface)", borderRadius:10, padding:14, marginBottom:16, border:"1px solid var(--rim)", display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
-            {[{key:"date",label:"日付",type:"date"},{key:"label",label:"内容",type:"text",placeholder:"仕入れ支払"},{key:"amount",label:"金額(₱)",type:"number",placeholder:"8500"},{key:"note",label:"メモ",type:"text",placeholder:"備考"}].map(f=>(
-              <div key={f.key} style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                <label style={{ fontSize:11, fontWeight:700, color:"var(--dim2)" }}>{f.label}</label>
-                <input type={f.type} value={newItem[f.key]} placeholder={f.placeholder||""} onChange={e=>setNewItem(n=>({...n,[f.key]:e.target.value}))}
-                  style={{ border:"1px solid #e2e8f0", borderRadius:7, padding:"5px 10px", fontSize:12, width:f.key==="label"?160:f.key==="note"?140:90 }} />
+      )}
+
+      {/* ===== 口座管理 ===== */}
+      {activeSection === "accounts" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <div style={{ background:"var(--surface)", borderRadius:12, padding:18, border:"1px solid var(--rim)" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+              <div style={{ fontWeight:800, fontSize:14 }}>🏦 口座残高</div>
+              <button onClick={()=>setEditBalance(!editBalance)}
+                style={{ background:"var(--orange)", color:"#fff", border:"none", borderRadius:8, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                {editBalance?"完了":"残高を更新"}
+              </button>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+              {[
+                { key:"payoneerUsd", label:"Payoneer (USD)", prefix:"$", color:"#3b82f6", icon:"💵" },
+                { key:"payoneerJpy", label:"Payoneer (JPY)", prefix:"¥", color:"#22c55e", icon:"💴" },
+                { key:"bankJpy", label:"日本円口座", prefix:"¥", color:"#a78bfa", icon:"🏦" },
+              ].map(a => (
+                <div key={a.key} style={{ padding:"12px 16px", background:"rgba(255,255,255,0.03)", borderRadius:10, border:"1px solid var(--rim)" }}>
+                  <div style={{ fontSize:11, color:"var(--dim2)", marginBottom:4 }}>{a.icon} {a.label}</div>
+                  {editBalance ? (
+                    <input type="number" value={settings[a.key]} onChange={e=>setSettings(s=>({...s,[a.key]:Number(e.target.value)}))}
+                      onBlur={()=>saveSettings(settings)}
+                      style={{ ...inp, width:"100%", fontSize:16, fontWeight:700 }} />
+                  ) : (
+                    <div style={{ fontSize:18, fontWeight:800, color:a.color }}>{a.prefix}{Number(settings[a.key]).toLocaleString()}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* 為替差損サマリー */}
+            <div style={{ marginTop:16, padding:12, background:"rgba(249,115,22,0.06)", borderRadius:10, border:"1px solid rgba(249,115,22,0.2)" }}>
+              <div style={{ fontSize:12, fontWeight:700, color:"var(--orange)", marginBottom:8 }}>📊 為替差損サマリー</div>
+              <div style={{ fontSize:12, color:"var(--dim2)" }}>
+                {Object.values(incomeStatuses).filter(s=>s.status==="completed"&&s.receivedJpy&&s.payoneerRate).map((s,i)=>{
+                  const key = Object.keys(incomeStatuses)[i]
+                  const incItem = incomeItems.find(it=>it.key===key)
+                  if (!incItem) return null
+                  const expected = Math.round(incItem.amount * s.payoneerRate)
+                  const diff = s.receivedJpy - expected
+                  return (
+                    <div key={i} style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                      <span>{incItem.date}</span>
+                      <span style={{ color:diff>=0?"#22c55e":"#ef4444", fontWeight:700 }}>
+                        {diff>=0?"+":""}{diff.toLocaleString()}¥
+                      </span>
+                    </div>
+                  )
+                })}
+                <div style={{ borderTop:"1px solid var(--rim)", paddingTop:8, marginTop:4, display:"flex", justifyContent:"space-between", fontWeight:700 }}>
+                  <span>累計差損益</span>
+                  <span style={{ color:"var(--orange)" }}>
+                    {(()=>{
+                      const total = Object.values(incomeStatuses).filter(s=>s.status==="completed"&&s.receivedJpy&&s.payoneerRate).reduce((sum,s,i)=>{
+                        const key = Object.keys(incomeStatuses)[i]
+                        const incItem = incomeItems.find(it=>it.key===key)
+                        if (!incItem) return sum
+                        return sum + (s.receivedJpy - Math.round(incItem.amount * s.payoneerRate))
+                      },0)
+                      return (total>=0?"+":"")+total.toLocaleString()+"¥"
+                    })()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== クレカ管理 ===== */}
+      {activeSection === "cards" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          {/* クレカ登録 */}
+          <div style={{ background:"var(--surface)", borderRadius:12, padding:18, border:"1px solid var(--rim)" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+              <div style={{ fontWeight:800, fontSize:14 }}>💳 クレジットカード</div>
+              <button onClick={()=>setShowAddCard(!showAddCard)}
+                style={{ background:"var(--orange)", color:"#fff", border:"none", borderRadius:8, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                ＋ カード追加
+              </button>
+            </div>
+            {showAddCard && (
+              <div style={{ padding:14, background:"rgba(255,255,255,0.03)", borderRadius:10, border:"1px solid var(--rim)", marginBottom:12 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr", gap:8, marginBottom:8 }}>
+                  {[
+                    { key:"name", label:"カード名", placeholder:"楽天カード" },
+                    { key:"limit", label:"利用限度額(¥)", placeholder:"500000", type:"number" },
+                    { key:"closingDay", label:"締日", placeholder:"15", type:"number" },
+                    { key:"paymentDay", label:"引落日", placeholder:"10", type:"number" },
+                  ].map(f=>(
+                    <div key={f.key}>
+                      <label style={lbl}>{f.label}</label>
+                      <input type={f.type||"text"} value={newCard[f.key]} onChange={e=>setNewCard(c=>({...c,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                        style={{ ...inp, width:"100%" }} />
+                    </div>
+                  ))}
+                </div>
+                <button onClick={()=>{
+                  if (!newCard.name||!newCard.closingDay||!newCard.paymentDay) return
+                  const updated = [...cards, { ...newCard, id:Date.now().toString(), limit:Number(newCard.limit)||0, closingDay:Number(newCard.closingDay), paymentDay:Number(newCard.paymentDay) }]
+                  setCards(updated); saveCards(updated); setShowAddCard(false); setNewCard({name:"",limit:"",closingDay:"",paymentDay:"",color:"#3b82f6"})
+                }} style={{ background:"var(--orange)", color:"#fff", border:"none", borderRadius:8, padding:"6px 16px", fontSize:12, fontWeight:700, cursor:"pointer" }}>登録</button>
+              </div>
+            )}
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {cards.length===0 ? <div style={{ color:"var(--dim2)", fontSize:13, textAlign:"center", padding:16 }}>カードが登録されていません</div>
+              : cards.map((card,i)=>(
+                <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 14px", background:"rgba(255,255,255,0.03)", borderRadius:10, border:"1px solid var(--rim)" }}>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:13 }}>💳 {card.name}</div>
+                    <div style={{ fontSize:11, color:"var(--dim2)" }}>締日: {card.closingDay}日 / 引落日: {card.paymentDay}日 {card.limit>0&&`/ 限度額: ¥${Number(card.limit).toLocaleString()}`}</div>
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#f59e0b" }}>買掛金: ¥{(payablesByCard[card.id]||0).toLocaleString()}</div>
+                    <button onClick={()=>{ const updated=cards.filter((_,j)=>j!==i); setCards(updated); saveCards(updated) }}
+                      style={{ fontSize:10, color:"#ef4444", background:"transparent", border:"none", cursor:"pointer", marginTop:2 }}>削除</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 買掛金入力 */}
+          <div style={{ background:"var(--surface)", borderRadius:12, padding:18, border:"1px solid var(--rim)" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+              <div style={{ fontWeight:800, fontSize:14 }}>📝 買掛金入力</div>
+              <button onClick={()=>setShowAddPayable(!showAddPayable)}
+                style={{ background:"var(--orange)", color:"#fff", border:"none", borderRadius:8, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                ＋ 追加
+              </button>
+            </div>
+            {showAddPayable && (
+              <div style={{ padding:14, background:"rgba(255,255,255,0.03)", borderRadius:10, border:"1px solid var(--rim)", marginBottom:12 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:8, marginBottom:8 }}>
+                  <div>
+                    <label style={lbl}>カード</label>
+                    <select value={newPayable.cardId} onChange={e=>setNewPayable(p=>({...p,cardId:e.target.value}))}
+                      style={{ ...inp, width:"100%" }}>
+                      <option value="">選択</option>
+                      {cards.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>利用日</label>
+                    <input type="date" value={newPayable.date} onChange={e=>setNewPayable(p=>({...p,date:e.target.value}))} style={{ ...inp, width:"100%" }} />
+                  </div>
+                  <div>
+                    <label style={lbl}>内容</label>
+                    <input value={newPayable.label} onChange={e=>setNewPayable(p=>({...p,label:e.target.value}))} placeholder="仕入れ" style={{ ...inp, width:"100%" }} />
+                  </div>
+                  <div>
+                    <label style={lbl}>金額(¥)</label>
+                    <input type="number" value={newPayable.amountJpy} onChange={e=>setNewPayable(p=>({...p,amountJpy:e.target.value}))} placeholder="10000" style={{ ...inp, width:"100%" }} />
+                  </div>
+                  <div>
+                    <label style={lbl}>メモ</label>
+                    <input value={newPayable.note} onChange={e=>setNewPayable(p=>({...p,note:e.target.value}))} placeholder="備考" style={{ ...inp, width:"100%" }} />
+                  </div>
+                </div>
+                <button onClick={addPayable} style={{ background:"var(--orange)", color:"#fff", border:"none", borderRadius:8, padding:"6px 16px", fontSize:12, fontWeight:700, cursor:"pointer" }}>追加</button>
+              </div>
+            )}
+            <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+              {payables.length===0 ? <div style={{ color:"var(--dim2)", fontSize:13, textAlign:"center", padding:16 }}>買掛金データがありません</div>
+              : payables.map((p,i)=>{
+                const card = cards.find(c=>c.id===p.cardId)
+                const payDate = card ? getPaymentDate(p.date, card.closingDay, card.paymentDay) : "?"
+                return (
+                  <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px", background:"rgba(255,255,255,0.02)", borderRadius:8, border:"1px solid var(--rim)" }}>
+                    <div>
+                      <div style={{ fontSize:12, fontWeight:600 }}>{p.label}</div>
+                      <div style={{ fontSize:11, color:"var(--dim2)" }}>{p.date} 利用 / {card?.name||"カード不明"} / 引落予定: {payDate}</div>
+                    </div>
+                    <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:"#f59e0b" }}>¥{Number(p.amountJpy).toLocaleString()}</div>
+                      <button onClick={()=>deletePayable(p.id)} style={{ fontSize:10, color:"#ef4444", background:"transparent", border:"none", cursor:"pointer" }}>削除</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {payables.length>0 && (
+              <div style={{ marginTop:12, display:"flex", justifyContent:"space-between", padding:"8px 12px", background:"rgba(245,158,11,0.08)", borderRadius:8, border:"1px solid rgba(245,158,11,0.2)" }}>
+                <span style={{ fontWeight:700, fontSize:13 }}>買掛金合計</span>
+                <span style={{ fontWeight:800, fontSize:14, color:"#f59e0b" }}>¥{totalPayables.toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== マイル・ポイント ===== */}
+      {activeSection === "points" && (
+        <div style={{ background:"var(--surface)", borderRadius:12, padding:18, border:"1px solid var(--rim)" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+            <div style={{ fontWeight:800, fontSize:14 }}>✈️ マイル・ポイント管理</div>
+            <button onClick={()=>setShowAddPoint(!showAddPoint)}
+              style={{ background:"var(--orange)", color:"#fff", border:"none", borderRadius:8, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+              ＋ 追加
+            </button>
+          </div>
+          {showAddPoint && (
+            <div style={{ padding:14, background:"rgba(255,255,255,0.03)", borderRadius:10, border:"1px solid var(--rim)", marginBottom:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 2fr", gap:8, marginBottom:8 }}>
+                {[
+                  { key:"name", label:"名称", placeholder:"ANAマイル" },
+                  { key:"points", label:"残高", placeholder:"10000", type:"number" },
+                  { key:"expiry", label:"有効期限", placeholder:"2026-12", type:"month" },
+                  { key:"note", label:"メモ", placeholder:"クレカ経由で積算" },
+                ].map(f=>(
+                  <div key={f.key}>
+                    <label style={lbl}>{f.label}</label>
+                    <input type={f.type||"text"} value={newPoint[f.key]} onChange={e=>setNewPoint(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                      style={{ ...inp, width:"100%" }} />
+                  </div>
+                ))}
+              </div>
+              <button onClick={()=>{
+                if (!newPoint.name||!newPoint.points) return
+                const updated = [...points, { ...newPoint, id:Date.now().toString(), points:Number(newPoint.points) }]
+                setPoints(updated); savePoints(updated); setShowAddPoint(false); setNewPoint({name:"",points:"",expiry:"",note:""})
+              }} style={{ background:"var(--orange)", color:"#fff", border:"none", borderRadius:8, padding:"6px 16px", fontSize:12, fontWeight:700, cursor:"pointer" }}>追加</button>
+            </div>
+          )}
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {points.length===0 ? <div style={{ color:"var(--dim2)", fontSize:13, textAlign:"center", padding:16 }}>マイル・ポイントが登録されていません</div>
+            : points.map((p,i)=>(
+              <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 14px", background:"rgba(255,255,255,0.03)", borderRadius:10, border:"1px solid var(--rim)" }}>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:13 }}>✈️ {p.name}</div>
+                  <div style={{ fontSize:11, color:"var(--dim2)" }}>
+                    {p.expiry&&`有効期限: ${p.expiry}`} {p.note&&`/ ${p.note}`}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <div style={{ fontSize:15, fontWeight:800, color:"#a78bfa" }}>{Number(p.points).toLocaleString()} pt</div>
+                  <button onClick={()=>{ const updated=points.filter((_,j)=>j!==i); setPoints(updated); savePoints(updated) }}
+                    style={{ fontSize:10, color:"#ef4444", background:"transparent", border:"none", cursor:"pointer" }}>削除</button>
+                </div>
               </div>
             ))}
-            <button onClick={handleAdd} style={{ background:"var(--orange)", color:"#fff", border:"none", borderRadius:8, padding:"7px 16px", fontSize:12, fontWeight:700, cursor:"pointer" }}>追加</button>
           </div>
-        )}
-        {timeline.length===0 ? (
-          <div style={{ textAlign:"center", padding:"30px 0", color:"var(--dim2)", fontSize:13 }}>MyIncomeをアップロードすると入金予定が自動表示されます</div>
-        ) : timeline.map((item,i)=>(
-          <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:i<timeline.length-1?"1px solid #f1f5f9":"none" }}>
-            <div style={{ width:72, flexShrink:0 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:"var(--text)" }}>{item.date.slice(5).replace("-","/")}</div>
-            </div>
-            <div style={{ width:32, height:32, borderRadius:"50%", flexShrink:0, background:item.type==="income"?"#dcfce7":"#fee2e2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>
-              {item.type==="income"?"⬆️":"⬇️"}
-            </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:13, fontWeight:600, color:"var(--text)" }}>{item.label}</div>
-              <div style={{ fontSize:11, color:"var(--dim2)" }}>
-                {item.count?`${item.count}件分`:item.note||""}
-                {item.status==="scheduled"&&<span style={{ marginLeft:6, background:"#e0f2fe", color:"#3b82f6", fontSize:10, fontWeight:700, padding:"1px 6px", borderRadius:10 }}>予定</span>}
-                {item.status==="released"&&<span style={{ marginLeft:6, background:"#dcfce7", color:"#22c55e", fontSize:10, fontWeight:700, padding:"1px 6px", borderRadius:10 }}>確定</span>}
-              </div>
-            </div>
-            <div style={{ textAlign:"right", flexShrink:0 }}>
-              <div style={{ fontSize:14, fontWeight:800, color:item.type==="income"?"#16a34a":"#ef4444" }}>
-                {item.type==="income"?"+":"-"}₱{Math.abs(item.amount).toLocaleString()}
-              </div>
-            </div>
-            <div style={{ width:90, flexShrink:0, textAlign:"right", padding:"4px 10px", background:"var(--surface)", borderRadius:8, border:"1px solid var(--rim)" }}>
-              <div style={{ fontSize:10, color:"var(--dim2)" }}>残高</div>
-              <div style={{ fontSize:12, fontWeight:700, color:"var(--text)" }}>₱{item.balance.toLocaleString()}</div>
-            </div>
-          </div>
-        ))}
-        <div style={{ marginTop:12, fontSize:11, color:"var(--dim2)", textAlign:"center" }}>🔮 将来: Shopee API / LS-System連携で自動反映</div>
-      </div>
+        </div>
+      )}
     </div>
   )
 }
+
+// 引落日計算ユーティリティ
+function getPaymentDate(useDate, closingDay, paymentDay) {
+  try {
+    const d = new Date(useDate)
+    const day = d.getDate()
+    let year = d.getFullYear()
+    let month = d.getMonth() // 0-indexed
+    // 締日を超えていたら翌月引落
+    if (day > Number(closingDay)) month += 1
+    if (month > 11) { month = 0; year += 1 }
+    // 翌月の引落日
+    month += 1
+    if (month > 11) { month = 0; year += 1 }
+    return `${year}-${String(month+1).padStart(2,"0")}-${String(paymentDay).padStart(2,"0")}`
+  } catch(e) { return "?" }
+}
+
 
 export default function ShopeeManagerPage({ uid: propUid }) {
   const { user } = useAuth()
@@ -543,7 +993,7 @@ export default function ShopeeManagerPage({ uid: propUid }) {
         <div style={{ padding:20 }}>
           
           {tab==="profit"&&<ProfitTab incomeData={incomeData} onUpload={handleIncomeUpload} fileName={incomeFileName} releasedData={releasedData} onReleasedUpload={handleReleasedUpload} releasedFileName={releasedFileName} inventoryItems={inventoryItems} fxRate={fxRate} orders={orders} />}
-          {tab==="cashflow"&&<CashflowTab incomeData={incomeData} cashflowItems={cashflowItems} onAddExpense={handleAddExpense} />}
+          {tab==="cashflow"&&<CashflowTab incomeData={incomeData} cashflowItems={cashflowItems} onAddExpense={handleAddExpense} uid={effectiveUid} />}
         </div>
       </div>
       <div style={{ marginTop:14, padding:"10px 16px", background:"#eff6ff", borderRadius:8, border:"1px solid #bfdbfe", fontSize:12, color:"#1d4ed8", display:"flex", gap:20, flexWrap:"wrap" }}>
