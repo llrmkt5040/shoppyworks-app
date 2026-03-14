@@ -28,10 +28,9 @@ export default function CompetitorPage({ uid }) {
       const snap = await getDocs(query(
         collection(db, "competitor_analyses"),
         where("uid", "==", uid),
-        orderBy("createdAt", "desc"),
         limit(20)
       ))
-      setHistories(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      setHistories(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||"")))
     } catch(e) { console.error(e) }
   }
 
