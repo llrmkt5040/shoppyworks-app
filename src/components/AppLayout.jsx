@@ -22,6 +22,7 @@ import ActionLogPage from "../pages/ActionLogPage"
 import InventoryPage from "../pages/InventoryPage"
 import ShippingPage from "../pages/ShippingPage"
 import BreakEvenPage from "../pages/BreakEvenPage"
+import CompetitorPage from "../pages/CompetitorPage"
 import RequestsPage from "../pages/RequestsPage"
 import ShopeeManagerPage from "../pages/ShopeeManagerPage"
 import MassUpdatePage from "../pages/MassUpdatePage"
@@ -249,7 +250,7 @@ export default function AppLayout() {
       case "requests":      return <RequestsPage uid={uid} viewOnly={viewOnly} />
       case "shopee":        return <ShopeeManagerPage uid={uid} viewOnly={viewOnly} />
       case "shipping":      return <ShippingPage uid={uid} viewOnly={viewOnly} />
-      case "competitor":    return <ComingSoonPage title="CompetitorWatch" sub="競合セラー管理" icon="🔍" />
+      case "competitor":    return <CompetitorPage uid={uid} />
       case "breakeven":     return <BreakEvenPage uid={uid} />
       case "massupdate":    return <MassUpdatePage uid={uid} viewOnly={viewOnly} />
       case "accounthealth": return <AccountHealthPage uid={uid} viewOnly={viewOnly} />
