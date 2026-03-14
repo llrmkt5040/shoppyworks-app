@@ -7,6 +7,16 @@ const ANALYSIS_ITEMS = [
   { key: "reviews", label: "レビュー・評価の傾向", icon: "⭐" },
   { key: "swot", label: "強み・弱み・差別化ポイント", icon: "📊" },
   { key: "suggestions", label: "自社への改善提案", icon: "💡" },
+  { key: "monthlySales", label: "月間販売数（推測）", icon: "📈" },
+  { key: "revenueEstimate", label: "月間売上予測", icon: "💴" },
+  { key: "revenueEstimates", label: "月間売上予測比較", icon: "💴" },
+]
+
+const STATS_ITEMS = [
+  { key: "rating", label: "評価スコア", icon: "⭐" },
+  { key: "ratings", label: "評価スコア比較", icon: "⭐" },
+  { key: "productCount", label: "商品点数", icon: "📦" },
+  { key: "productCounts", label: "商品点数比較", icon: "📦" },
 ]
 
 export default function CompetitorPage({ uid }) {
@@ -187,7 +197,22 @@ export default function CompetitorPage({ uid }) {
             </div>
           )}
 
-          {/* 6項目 */}
+          {/* 基本スタッツ */}
+          {STATS_ITEMS.some(s => result.analysis?.[s.key]) && (
+            <div className="card" style={{ padding:"1rem 1.25rem", marginBottom:"0.75rem" }}>
+              <div style={{ fontSize:"0.65rem", fontWeight:700, color:"var(--dim2)", marginBottom:"0.75rem", textTransform:"uppercase" }}>📊 基本データ</div>
+              <div style={{ display:"flex", gap:"1rem", flexWrap:"wrap" }}>
+                {STATS_ITEMS.filter(s => result.analysis?.[s.key]).map(s => (
+                  <div key={s.key} style={{ padding:"0.5rem 1rem", background:"rgba(255,255,255,0.03)", borderRadius:8, border:"1px solid var(--rim)" }}>
+                    <div style={{ fontSize:"0.62rem", color:"var(--dim2)", marginBottom:2 }}>{s.icon} {s.label}</div>
+                    <div style={{ fontSize:"0.9rem", fontWeight:700, color:"var(--text)" }}>{result.analysis[s.key]}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 分析項目 */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.75rem" }}>
             {ANALYSIS_ITEMS.map(item => (
               result.analysis?.[item.key] && (

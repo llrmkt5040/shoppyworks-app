@@ -115,8 +115,8 @@ exports.analyzeCompetitor = onRequest({
     ).join("\n\n---\n\n")
 
     const analysisPrompt = mode === "single"
-      ? `以下の競合Shopeeショップを分析してください。${myShopContext}\n\n${competitorContext}\n\n以下の6項目について日本語で分析し、JSONのみ返してください（マークダウン不要）:\n{"pricing":"価格帯・値付け戦略の分析","lineup":"商品ラインナップ・カテゴリ構成の分析","seo":"タイトル・SEOキーワード戦略の分析","reviews":"レビュー・評価傾向の分析","swot":"強み・弱み・差別化ポイント","suggestions":"自社への具体的な改善提案","summary":"総合評価","shopName":"ショップ名（判明した場合）"}`
-      : `以下の${urls.length}つの競合Shopeeショップを比較分析してください。${myShopContext}\n\n${competitorContext}\n\n各ショップを比較し、JSONのみ返してください:\n{"pricing":"各ショップの価格戦略比較","lineup":"商品ラインナップ・構成の比較","seo":"SEO・タイトル戦略の比較","reviews":"レビュー・評価の比較","swot":"各ショップの強み・弱み比較","suggestions":"自社への具体的な改善提案","summary":"総合的な競合状況の評価","shopNames":"各ショップ名"}`
+      ? `以下の競合Shopeeショップを分析してください。${myShopContext}\n\n${competitorContext}\n\n以下の項目について日本語で分析し、JSONのみ返してください（マークダウン不要）:\n{"shopName":"ショップ名","rating":"評価スコア（例: 4.8★）","productCount":"商品点数（例: 約120点）","monthlySales":"月間販売数の推測（soldデータから推計）","revenueEstimate":"月間売上予測（価格×販売数の概算）","pricing":"価格帯・値付け戦略の分析","lineup":"商品ラインナップ・カテゴリ構成の分析","seo":"タイトル・SEOキーワード戦略の分析","reviews":"レビュー・評価傾向の分析","swot":"強み・弱み・差別化ポイント","suggestions":"自社への具体的な改善提案","summary":"総合評価（100字程度）"}`
+      : `以下の${urls.length}つの競合Shopeeショップを比較分析してください。${myShopContext}\n\n${competitorContext}\n\n各ショップを比較し、JSONのみ返してください:\n{"shopNames":"各ショップ名","ratings":"各ショップの評価スコア比較","productCounts":"各ショップの商品点数比較","monthlySales":"各ショップの月間販売数推測","revenueEstimates":"各ショップの月間売上予測比較","pricing":"各ショップの価格戦略比較","lineup":"商品ラインナップ・構成の比較","seo":"SEO・タイトル戦略の比較","reviews":"レビュー・評価の比較","swot":"各ショップの強み・弱み比較","suggestions":"自社への具体的な改善提案","summary":"総合的な競合状況の評価"}`
 
     const analysisRes = await client.messages.create({
       model: "claude-sonnet-4-20250514",
