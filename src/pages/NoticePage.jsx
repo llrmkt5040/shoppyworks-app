@@ -1,4 +1,9 @@
 const CHANGELOG = [
+  { date: "2026-03-14", text: "💱 v0.15.0: ShopeeManager利益管理にUSD換算(Payoneer 2%込)・JPY換算表示を追加" },
+  { date: "2026-03-14", text: "🤖 v0.14.1: 全ページのAI機能をFirestore APIキー共有に統一（スタッフもAI利用可能に）" },
+  { date: "2026-03-14", text: "🧠 v0.14.0: ShopeeAnalyzer AI改善アドバイザー実装（商品データ分析→具体的改善提案）" },
+  { date: "2026-03-14", text: "⚡ v0.13.2: AI機能ON/OFFトグル追加（設定→システムタブでオーナーが制御）" },
+  { date: "2026-03-14", text: "🔗 v0.13.1: ShopeeDiaryのショップURLを永続保存（一度入力すれば次回から自動表示）" },
   { date: "2026-03-13", text: "🔔 v0.13.0: Firebase Functionsメール通知（Pasabuy新規問合せ・Diary未記録アラート）" },
   { date: "2026-03-13", text: "🔑 v0.12.2: Anthropic APIキー設定UI追加（設定→システムタブ・接続テスト機能付き）" },
   { date: "2026-03-13", text: "🔲 v0.12.1: MassUpdate 全フィールド表示トグルボタン追加" },
@@ -30,16 +35,20 @@ const CHANGELOG = [
 ]
 
 const ROADMAP = [
-  { status: "✅", text: "AI機能（ダッシュボード分析・Pasabuy価格提案・オファー文章3パターン・MassUpdate補完）" },
+  { status: "✅", text: "AI機能（Analyzer提案・ダッシュボード分析・Pasabuy価格提案・MassUpdate補完・スタッフ共有）" },
   { status: "✅", text: "メール通知（Firebase Functions・Pasabuy新規問合せ・Diary未記録アラート）" },
   { status: "✅", text: "アカウントヘルスAI画像読み取り（スクショ→自動入力）" },
+  { status: "✅", text: "ShopeeManager USD/JPY換算（Payoneer手数料2%込）" },
   { status: "🟠", text: "Shopee API連動（注文・商品・アカウントヘルスの自動取得）" },
   { status: "🟡", text: "講師コクピット（受講生進捗一覧）" },
   { status: "🟡", text: "卸メニュー（SekaLogi連携・ドロップシッピング）" },
-  { status: "🔵", text: "Shopee API連動（4月以降）" },
 ]
 
 const NOTICES = [
+  { date: "2026-03-14", type: "info", text: "🤖 v0.14 リリース！ShopeeAnalyzerにAI改善アドバイザーを追加。AI提案タブから商品データ分析→改善提案が受けられます。" },
+  { date: "2026-03-14", type: "info", text: "👥 AI機能がスタッフアカウントでも利用可能に。オーナーが設定→システムタブでAPIキーを登録すれば自動共有されます。" },
+  { date: "2026-03-14", type: "info", text: "💱 ShopeeManagerの利益管理にUSD・JPY換算を追加。Payoneer手数料2%込みの実質入金額が確認できます。" },
+  { date: "2026-03-14", type: "info", text: "🔗 行動ログのショップURLが永続保存に。一度入力すれば次回から自動表示されます。" },
   { date: "2026-03-13", type: "info", text: "🔔 v0.13.0 リリース！メール通知機能を追加しました。設定→システムタブからメールアドレスを登録してください。" },
   { date: "2026-03-13", type: "info", text: "🤖 AI機能が全ページで使えるようになりました。設定→システムタブでAnthropicのAPIキーを登録してください。" },
   { date: "2026-03-13", type: "info", text: "💰 PasabuyにAI価格提案・オファー文3パターン自動生成を追加しました。案件の「🤖 AI」ボタンから使えます。" },
