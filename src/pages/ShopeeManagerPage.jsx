@@ -191,6 +191,10 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
   const refund       = Math.abs(Number(s.refundAmount)||0)
   const marginRate   = totalPrice?(totalRelease/totalPrice*100).toFixed(1):"—"
   const feeRate      = totalPrice?((commFee+serviceFee+transFee)/totalPrice*100).toFixed(1):"—"
+  const payoneerRate = 0.98
+  const totalReleaseUsd = totalRelease * 0.0175 * payoneerRate
+  const totalReleaseJpy = fxRate > 0 ? totalRelease * fxRate * payoneerRate : 0
+  const totalPriceJpy = fxRate > 0 ? totalPrice * fxRate * payoneerRate : 0
   const waterfall = [
     {label:"売上（正価）",value:totalPrice,positive:true},
     {label:"返金・返品",value:-refund,positive:false},
