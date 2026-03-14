@@ -36,6 +36,37 @@ export default function CompetitorPage({ uid }) {
     } catch(e) { console.error(e) }
   }
 
+  async function loadMyShopData() {
+    try {
+      const { db } = await import("../lib/firebase")
+      const { collection, query, where, getDocs } = await import("firebase/firestore")
+      const now = new Date()
+      const jst = new Date(now.getTime() + 9*60*60*1000)
+      const thisMonth = jst.toISOString().slice(0,7)
+      const prevMonth = new Date(jst.getFullYear(), jst.getMonth()-1, 1).toISOString().slice(0,7)
+      const logsSnap = await getDocs(query(collection(db,"action_logs"), where("uid","==",uid)))
+      const logs = logsSnap.docs.map(d=>d.data())
+      const tm = logs.filter(l=>l.date?.startsWith(thisMonth))
+      const pm = logs.filter(l=>l.date?.startsWith(prevMonth))
+      const calc = ls => ({
+        salesPhp: ls.reduce((s,l)=>s+(Number(l.sales_php)||0),0),
+        salesJpy: ls.reduce((s,l)=>s+(Number(l.sales_jpy)||0),0),
+        orders: ls.reduce((s,l)=>s+(Number(l.orders)||0),0),
+        visitors: ls.reduce((s,l)=>s+(Number(l.visitors)||0),0),
+      })
+      const t = calc(tm), p = calc(pm)
+      const cvr = t.visitors>0 ? (t.orders/t.visitors*100).toFixed(2) : "不明"
+      const prodSnap = await getDocs(query(collection(db,"physical_products"),where("uid","==",uid)))
+      const products = prodSnap.docs.map(d=>d.data())
+      const avgCost = products.length>0 ? Math.round(products.reduce((s,p)=>s+(Number(p.unitPrice)||0),0)/products.length) : 0
+      return `【自社実績データ】
+今月売上: ₱${t.salesPhp.toLocaleString()} / ¥${t.salesJpy.toLocaleString()}
+今月注文数: ${t.orders}件 / Visitors: ${t.visitors.toLocaleString()} / CVR: ${cvr}%
+先月売上: ₱${p.salesPhp.toLocaleString()} / ¥${p.salesJpy.toLocaleString()} / 注文数: ${p.orders}件
+取扱商品数: ${products.length}点 / 平均仕入単価: ¥${avgCost}`
+    } catch(e) { return "自社データ取得失敗" }
+  }
+
   async function analyze() {
     if (!form.shopName) return setError("ショップ名は必須です")
     setError("")
@@ -54,7 +85,8 @@ export default function CompetitorPage({ uid }) {
 【応答率・応答時間】: ${form.responseRate || "不明"} / ${form.responseTime || "不明"}
 【メモ・特記事項】: ${form.memo || "なし"}
       `.trim()
-      const myShopContext = form.myShopUrl ? `\n【自社ショップURL】: ${form.myShopUrl}` : ""
+      const myData = await loadMyShopData()
+      const myShopContext = myData + (form.myShopUrl ? `\n自社URL: ${form.myShopUrl}` : "")
 
       const res = await fetch(ANALYZE_API, {
         method: "POST",
