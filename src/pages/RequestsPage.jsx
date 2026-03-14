@@ -129,7 +129,7 @@ function AIModal({ item, onClose, onSaveOffer }) {
 }`
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": localStorage.getItem("sw_anthropic_key") || import.meta.env.VITE_ANTHROPIC_API_KEY || "", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        headers: { "Content-Type": "application/json", "x-api-key": await (async()=>{const{getAiKey}=await import('../lib/ai');return await getAiKey()})(), "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 600, messages: [{ role: "user", content: prompt }] })
       })
       const data = await res.json()
@@ -166,7 +166,7 @@ function AIModal({ item, onClose, onSaveOffer }) {
 }`
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": localStorage.getItem("sw_anthropic_key") || import.meta.env.VITE_ANTHROPIC_API_KEY || "", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        headers: { "Content-Type": "application/json", "x-api-key": await (async()=>{const{getAiKey}=await import('../lib/ai');return await getAiKey()})(), "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 800, messages: [{ role: "user", content: prompt }] })
       })
       const data = await res.json()
@@ -363,7 +363,7 @@ function CaseForm({ uid, buyers, initialData, onSaved, onCancel }) {
     const bn=buyerMode==="select"?selectedBuyer:newBuyer.name
     try {
       const prompt = `You are a Shopee Philippines PASABUY seller. Generate friendly offer messages.\nProduct: ${product.name}\nOffer price: PHP ${calcResult.offerPHP}\n${bn?"Buyer name: "+bn:""}\nGenerate TWO short, casual, friendly messages (2-3 sentences each):\nEN: [English message]\nTL: [Tagalog message]`
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key": localStorage.getItem("sw_anthropic_key") || import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,messages:[{role:"user",content:prompt}]})})
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key": await (async()=>{const{getAiKey}=await import('../lib/ai');return await getAiKey()})(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,messages:[{role:"user",content:prompt}]})})
       const data=await res.json(), text=data.content[0].text
       const em=text.match(/EN:\s*(.+?)(?=TL:|$)/s), tm=text.match(/TL:\s*(.+?)$/s)
       setOfferMsg({en:em?.[1]?.trim()||"",tl:tm?.[1]?.trim()||""})
