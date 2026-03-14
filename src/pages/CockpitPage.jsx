@@ -218,7 +218,7 @@ export default function CockpitPage() {
 
       const results = await Promise.all(allUsers.map(async (u) => {
         const uid = u.uid || null
-        let monthlySales=0, monthlyOrders=0, streak=0, lastDate=null, recordedToday=false, diaryRate=0
+        let monthlySales=0, monthlyOrders=0, yesterdaySales=0, yesterdayOrders=0, streak=0, lastDate=null, recordedToday=false, diaryRate=0
 
         if (uid) {
           const diaryDocs = allDiary
@@ -228,6 +228,9 @@ export default function CockpitPage() {
           const monthDiary = diaryDocs.filter(d => d.date?.startsWith(thisMonth))
           monthlySales = monthDiary.reduce((s,d) => s+(parseFloat(d.sales_jpy)||0), 0)
           monthlyOrders = monthDiary.reduce((s,d) => s+(parseInt(d.orders)||0), 0)
+          const yesterdayDiary = diaryDocs.filter(d => d.date === jstYesterday)
+          yesterdaySales = yesterdayDiary.reduce((s,d) => s+(parseFloat(d.sales_jpy)||0), 0)
+          yesterdayOrders = yesterdayDiary.reduce((s,d) => s+(parseInt(d.orders)||0), 0)
 
           // 連続記録
           for (let i=0; i<30; i++) {
@@ -247,7 +250,7 @@ export default function CockpitPage() {
 
         const settings = uid ? (settingsMap[uid]||{}) : {}
         return {
-          ...u, uid, monthlySales, monthlyOrders, streak, lastDate,
+          ...u, uid, monthlySales, monthlyOrders, yesterdaySales, yesterdayOrders, streak, lastDate,
           recordedToday, diaryRate,
           staffEmails: settings.staff_emails||[],
           staffPerms: settings.staff_permissions||{}
@@ -337,8 +340,10 @@ export default function CockpitPage() {
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"0.75rem", marginBottom:"1.5rem" }}>
             {[
               { label:"受講生数", value:`${students.length}名`, icon:"👥", color:"var(--blue2)" },
-              { label:"今日記録済み", value:`${students.filter(s=>s.recordedToday).length}名`, icon:"✅", color:"var(--green)" },
-              { label:"今日未記録", value:`${students.filter(s=>!s.recordedToday).length}名`, icon:"⚠️", color:"var(--red)" },
+              { label:"前日記録済み", value:`${students.filter(s=>s.recordedToday).length}名`, icon:"✅", color:"var(--green)" },
+              { label:"前日未記録", value:`${students.filter(s=>!s.recordedToday).length}名`, icon:"⚠️", color:"var(--red)" },
+              { label:"前日売上合計", value:`¥${students.reduce((s,u)=>s+(u.yesterdaySales||0),0).toLocaleString()}`, icon:"💰", color:"var(--orange)" },
+              { label:"今月売上合計", value:`¥${students.reduce((s,u)=>s+(u.monthlySales||0),0).toLocaleString()}`, icon:"📈", color:"#22c55e" },
             ].map((c,i) => (
               <div key={i} className="card" style={{ padding:"1rem", textAlign:"center" }}>
                 <div style={{ fontSize:"1.5rem", marginBottom:"0.25rem" }}>{c.icon}</div>
@@ -351,7 +356,7 @@ export default function CockpitPage() {
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"0.78rem" }}>
               <thead>
                 <tr style={{ borderBottom:"1px solid var(--rim)" }}>
-                  {["受講生","前日の記録","連続記録","記録率","今月売上(¥)","今月注文数","最終記録日"].map((h,i) => (
+                  {["受講生","前日の記録","連続記録","記録率","前日売上(¥)","前日注文数","今月売上(¥)","今月注文数","最終記録日"].map((h,i) => (
                     <th key={i} style={{ padding:"0.5rem 0.75rem", textAlign:i===0?"left":"center", fontSize:"0.65rem", color:"var(--dim2)", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -379,6 +384,12 @@ export default function CockpitPage() {
                       <span style={{ fontWeight:700, color:s.diaryRate>=80?"var(--green)":s.diaryRate>=50?"var(--yellow)":"var(--red)" }}>
                         {s.diaryRate}%
                       </span>
+                    </td>
+                    <td style={{ textAlign:"center", padding:"0.75rem", fontWeight:700, color:s.yesterdaySales>0?"var(--orange)":"var(--dim2)" }}>
+                      {s.yesterdaySales>0?`¥${s.yesterdaySales.toLocaleString()}`:"—"}
+                    </td>
+                    <td style={{ textAlign:"center", padding:"0.75rem", fontWeight:700, color:s.yesterdayOrders>0?"var(--orange)":"var(--dim2)" }}>
+                      {s.yesterdayOrders>0?`${s.yesterdayOrders}件`:"—"}
                     </td>
                     <td style={{ textAlign:"center", padding:"0.75rem", fontWeight:700, color:s.monthlySales>0?"var(--text)":"var(--dim2)" }}>
                       {s.monthlySales>0?`¥${s.monthlySales.toLocaleString()}`:"—"}
