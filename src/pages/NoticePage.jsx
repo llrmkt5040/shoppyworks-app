@@ -1,4 +1,11 @@
 const CHANGELOG = [
+  { date: "2026-03-15", text: "💴 v0.22.0: 資金繰り管理を全面刷新（入金4段階ステータス・Payoneer USD着金・為替差損計算・クレカ管理・買掛金・マイル/ポイント管理）" },
+  { date: "2026-03-15", text: "🔍 v0.21.0: CompetitorWatch追加（競合セラー手動入力→AI分析・自社DBデータ自動連携・履歴管理）" },
+  { date: "2026-03-15", text: "🧮 v0.20.0: BreakEvenCalc追加（SLS送料テーブル・消費税還付・Payoneer手数料・複数購入シミュレーション・設定保存）" },
+  { date: "2026-03-15", text: "📋 v0.19.0: ShippingManager独立（ProfitManagerと同一データソース共有）" },
+  { date: "2026-03-15", text: "📦 v0.18.0: StockManager全面刷新（physical_products対応・親子商品・フラグ/ステータス・CSV取込・仕入先別ビュー・Shopee出品情報連携）" },
+  { date: "2026-03-15", text: "👥 v0.17.0: Cockpit強化（複数講師対応・新規ユーザー登録・前日売上/注文数・全員合計表示）" },
+  { date: "2026-03-15", text: "🗂️ v0.16.0: メニュー全面整理（英語/日本語2段表記・Sales/Listing/Stock/Tools カテゴライズ）" },
   { date: "2026-03-14", text: "💱 v0.15.0: ShopeeManager利益管理にUSD換算(Payoneer 2%込)・JPY換算表示を追加" },
   { date: "2026-03-14", text: "🤖 v0.14.1: 全ページのAI機能をFirestore APIキー共有に統一（スタッフもAI利用可能に）" },
   { date: "2026-03-14", text: "🧠 v0.14.0: ShopeeAnalyzer AI改善アドバイザー実装（商品データ分析→具体的改善提案）" },
@@ -35,11 +42,24 @@ const CHANGELOG = [
 ]
 
 const ROADMAP = [
-  { status: "🟠", text: "Shopee API連動（注文・商品・アカウントヘルスの自動取得）" },
+  { status: "🔴", text: "inventory_items旧コレクション整理・データ移行" },
+  { status: "🔴", text: "ユーザー目標設定（売上・利益目標・ゴールペース連動）" },
+  { status: "🟠", text: "在庫管理Phase 2（販売SKU管理・セット商品・チャネル別出品）" },
+  { status: "🟠", text: "ShopeeAnalyzer AI分析復活（Firebase Functions経由）" },
+  { status: "🟠", text: "XLSXデータのFirestore永続保存" },
+  { status: "🟡", text: "オンボーディング / 初回ウィザード" },
+  { status: "🟡", text: "在庫管理Phase 3（棚卸・発注アラート）" },
   { status: "🟡", text: "卸メニュー（SekaLogi連携・ドロップシッピング）" },
+  { status: "🔵", text: "Shopee API連動（注文・商品・アカウントヘルスの自動取得）" },
+  { status: "🔵", text: "マルチ国対応（SG・MY・TH）" },
 ]
 
 const NOTICES = [
+  { date: "2026-03-15", type: "info", text: "💴 v0.22.0 リリース！資金繰り管理が大幅強化。Payoneer USD着金・為替差損計算・クレカ管理・買掛金・マイル/ポイント管理が追加されました。" },
+  { date: "2026-03-15", type: "info", text: "🔍 CompetitorWatch追加！競合ショップ情報を手動入力してAI分析。自社データ（売上・CVR等）と自動比較して改善提案が届きます。" },
+  { date: "2026-03-15", type: "info", text: "🧮 BreakEvenCalcを追加！SLS送料テーブル対応・消費税還付・複数購入シミュレーション機能付きの損益分岐計算機です。" },
+  { date: "2026-03-15", type: "info", text: "📦 StockManager（在庫管理）が大幅強化！CSVインポート・仕入先別ビュー・Shopee出品情報との連携が可能になりました。" },
+  { date: "2026-03-15", type: "info", text: "🗂️ メニューを全面整理しました。Sales / Listing / Stock Management / Analysis & Tools の4カテゴリに整理し、英語/日本語の2段表記に統一しました。" },
   { date: "2026-03-14", type: "info", text: "🤖 v0.14 リリース！ShopeeAnalyzerにAI改善アドバイザーを追加。AI提案タブから商品データ分析→改善提案が受けられます。" },
   { date: "2026-03-14", type: "info", text: "👥 AI機能がスタッフアカウントでも利用可能に。オーナーが設定→システムタブでAPIキーを登録すれば自動共有されます。" },
   { date: "2026-03-14", type: "info", text: "💱 ShopeeManagerの利益管理にUSD・JPY換算を追加。Payoneer手数料2%込みの実質入金額が確認できます。" },
