@@ -35,12 +35,7 @@ const CHANGELOG = [
 ]
 
 const ROADMAP = [
-  { status: "✅", text: "AI機能（Analyzer提案・ダッシュボード分析・Pasabuy価格提案・MassUpdate補完・スタッフ共有）" },
-  { status: "✅", text: "メール通知（Firebase Functions・Pasabuy新規問合せ・Diary未記録アラート）" },
-  { status: "✅", text: "アカウントヘルスAI画像読み取り（スクショ→自動入力）" },
-  { status: "✅", text: "ShopeeManager USD/JPY換算（Payoneer手数料2%込）" },
   { status: "🟠", text: "Shopee API連動（注文・商品・アカウントヘルスの自動取得）" },
-  { status: "🟡", text: "講師コクピット（受講生進捗一覧）" },
   { status: "🟡", text: "卸メニュー（SekaLogi連携・ドロップシッピング）" },
 ]
 
