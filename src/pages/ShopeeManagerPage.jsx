@@ -214,8 +214,8 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
         <UploadArea label={`再アップロード（現在: ${activeFileName||"未アップロード"}）`} onUpload={activeUpload} uploaded={true} fileName={activeFileName} />
       </div>
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
-        <KpiCard icon="💰" label="売上合計" value={`₱${totalPrice.toLocaleString()}`} color="#3b82f6" />
-        <KpiCard icon="📊" label="入金合計（純利益）" value={`₱${totalRelease.toLocaleString()}`} color="#22c55e" />
+        <KpiCard icon="💰" label="売上合計" value={`₱${totalPrice.toLocaleString()}`} sub={fxRate>0?`¥${Math.round(totalPriceJpy).toLocaleString()}`:""} color="#3b82f6" />
+        <KpiCard icon="📊" label="入金合計（純利益）" value={`₱${totalRelease.toLocaleString()}`} sub={fxRate>0?`$${totalReleaseUsd.toFixed(2)} ／ ¥${Math.round(totalReleaseJpy).toLocaleString()}`:"為替未取得"} color="#22c55e" />
         <KpiCard icon="💸" label="手数料率" value={`${feeRate}%`} sub="コミッション+SF+TF" color="#f59e0b" />
         <KpiCard icon="📈" label="粗利率" value={`${marginRate}%`} sub="入金÷売上" color="#8b5cf6" />
       </div>
@@ -237,7 +237,10 @@ function ProfitTab({ incomeData, onUpload, fileName, releasedData, onReleasedUpl
         })}
         <div style={{ marginTop:14, paddingTop:12, borderTop:"2px solid #0f172a", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <span style={{ fontWeight:800, fontSize:13 }}>入金合計（純利益）</span>
-          <span style={{ fontWeight:800, fontSize:18, color:"#16a34a" }}>₱{totalRelease.toLocaleString()}</span>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontWeight:800, fontSize:18, color:"#16a34a" }}>₱{totalRelease.toLocaleString()}</div>
+            {fxRate > 0 && <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>💵 ${totalReleaseUsd.toFixed(2)} ／ 💴 ¥{Math.round(totalReleaseJpy).toLocaleString()}<span style={{fontSize:10,color:"#94a3b8",marginLeft:4}}>(Payoneer 2%込)</span></div>}
+          </div>
         </div>
       </div>
       </>)}
