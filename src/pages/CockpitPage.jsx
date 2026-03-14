@@ -2,10 +2,10 @@ import { useState, useEffect } from "react"
 import { db } from "../lib/firebase"
 import { collection, getDocs, query, orderBy, limit, doc, setDoc } from "firebase/firestore"
 
-const INSTRUCTOR_EMAIL = "tamaniha.hitoiki@gmail.com"
+const INSTRUCTOR_EMAILS = ["tamaniha.hitoiki@gmail.com", "yusukeok5040@gmail.com"]
 
 export function useIsInstructor(user) {
-  return user?.email?.toLowerCase() === INSTRUCTOR_EMAIL.toLowerCase()
+  return INSTRUCTOR_EMAILS.map(e=>e.toLowerCase()).includes(user?.email?.toLowerCase()||"")
 }
 
 function RankBadge({ rank }) {
@@ -199,7 +199,7 @@ export default function CockpitPage() {
       const allowedSnap = await getDocs(collection(db, "allowed_emails"))
       const allUsers = allowedSnap.docs
         .map(d => ({ email: d.id, ...d.data() }))
-        .filter(u => u.email.toLowerCase() !== INSTRUCTOR_EMAIL.toLowerCase())
+        .filter(u => !INSTRUCTOR_EMAILS.map(e=>e.toLowerCase()).includes(u.email.toLowerCase()))
 
       const settingsSnap = await getDocs(collection(db, "user_settings"))
       const settingsMap = {}
@@ -263,6 +263,38 @@ export default function CockpitPage() {
     if (!window.confirm(`${email} のログイン${currentActive?"を停止":"を許可"}しますか？`)) return
     await setDoc(doc(db, "allowed_emails", email), { active: !currentActive }, { merge: true })
     loadAll()
+  }
+
+  const [showAddUser, setShowAddUser] = useState(false)
+  const [newEmail, setNewEmail] = useState("")
+  const [newName, setNewName] = useState("")
+  const [newRole, setNewRole] = useState("participant")
+  const [addingUser, setAddingUser] = useState(false)
+
+  async function addNewUser() {
+    if (!newEmail) return alert("メールアドレスを入力してください")
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return alert("メールアドレスの形式が正しくありません")
+    setAddingUser(true)
+    try {
+      const { db } = await import("../lib/firebase")
+      const { doc, setDoc, getDoc } = await import("firebase/firestore")
+      const ref = doc(db, "allowed_emails", newEmail.toLowerCase())
+      const snap = await getDoc(ref)
+      if (snap.exists()) { alert("このメールアドレスはすでに登録されています"); setAddingUser(false); return }
+      await setDoc(ref, {
+        name: newName || "",
+        role: newRole,
+        active: true,
+        page_permissions: {},
+        assigned_students: [],
+        createdAt: new Date().toISOString(),
+      })
+      alert("✅ " + newEmail + " を登録しました！")
+      setNewEmail(""); setNewName(""); setNewRole("participant")
+      setShowAddUser(false)
+      loadAll()
+    } catch(e) { alert("登録エラー: " + e.message) }
+    setAddingUser(false)
   }
 
   const TABS = [
@@ -378,6 +410,48 @@ export default function CockpitPage() {
       {/* 👥 ユーザー管理タブ */}
       {tab === "users" && (
         <div style={{ display:"flex", flexDirection:"column", gap:"1rem" }}>
+          {/* 新規ユーザー登録 */}
+          <div className="card" style={{ padding:"1rem 1.25rem" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ fontWeight:700, fontSize:"0.85rem" }}>👤 新規ユーザー登録</div>
+              <button onClick={() => setShowAddUser(!showAddUser)}
+                style={{ padding:"0.4rem 1rem", borderRadius:8, border:"none", background:showAddUser?"var(--rim)":"var(--orange)", color:"#fff", fontSize:"0.78rem", fontWeight:700, cursor:"pointer" }}>
+                {showAddUser ? "キャンセル" : "＋ 新規登録"}
+              </button>
+            </div>
+            {showAddUser && (
+              <div style={{ marginTop:"1rem", display:"flex", flexDirection:"column", gap:"0.75rem" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr", gap:"0.75rem" }}>
+                  <div>
+                    <label style={{ fontSize:"0.62rem", fontWeight:700, color:"var(--dim2)", display:"block", marginBottom:"0.25rem" }}>メールアドレス *</label>
+                    <input value={newEmail} onChange={e=>setNewEmail(e.target.value)} placeholder="example@gmail.com"
+                      style={{ width:"100%", padding:"0.5rem 0.7rem", borderRadius:8, border:"1px solid var(--rim)", background:"var(--surface)", color:"var(--text)", fontSize:"0.85rem", boxSizing:"border-box" }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize:"0.62rem", fontWeight:700, color:"var(--dim2)", display:"block", marginBottom:"0.25rem" }}>名前</label>
+                    <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="山田太郎"
+                      style={{ width:"100%", padding:"0.5rem 0.7rem", borderRadius:8, border:"1px solid var(--rim)", background:"var(--surface)", color:"var(--text)", fontSize:"0.85rem", boxSizing:"border-box" }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize:"0.62rem", fontWeight:700, color:"var(--dim2)", display:"block", marginBottom:"0.25rem" }}>ロール</label>
+                    <select value={newRole} onChange={e=>setNewRole(e.target.value)}
+                      style={{ width:"100%", padding:"0.5rem 0.7rem", borderRadius:8, border:"1px solid var(--rim)", background:"var(--surface)", color:"var(--text)", fontSize:"0.85rem" }}>
+                      <option value="participant">受講生</option>
+                      <option value="support">スタッフ</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ fontSize:"0.68rem", color:"var(--dim2)", background:"rgba(255,255,255,0.03)", padding:"0.5rem 0.75rem", borderRadius:8 }}>
+                  ⚠️ 登録後、ユーザーはこのメールアドレスでGoogleログインするとアクセスできます
+                </div>
+                <button onClick={addNewUser} disabled={addingUser}
+                  style={{ padding:"0.55rem 1.5rem", borderRadius:8, border:"none", background:"var(--orange)", color:"#fff", fontSize:"0.82rem", fontWeight:700, cursor:addingUser?"not-allowed":"pointer", opacity:addingUser?0.7:1, alignSelf:"flex-start" }}>
+                  {addingUser ? "登録中..." : "✅ 登録する"}
+                </button>
+              </div>
+            )}
+          </div>
+
           {students.map((s,i) => (
             <UserCard key={i} student={s} allStudents={students} onRefresh={loadAll} />
           ))}

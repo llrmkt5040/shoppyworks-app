@@ -30,7 +30,7 @@ import TaskChecklist, { useUncompletedCount } from "./TaskChecklist"
 import SettingsPage, { STAFF_PAGES, DEFAULT_STAFF_PERMS } from "../pages/SettingsPage"
 import CockpitPage from "../pages/CockpitPage"
 
-const INSTRUCTOR_EMAIL = "tamaniha.hitoiki@gmail.com"
+const INSTRUCTOR_EMAILS = ["tamaniha.hitoiki@gmail.com", "yusukeok5040@gmail.com"]
 
 const NAV = [
   { id: "_mgmt",         icon: "",    label: "Project Management", sub: "",           section: "header", instructorOnly: true },
@@ -118,7 +118,7 @@ export default function AppLayout() {
   // サポート講師
   const [supportTarget, setSupportTarget] = useState(null)
 
-  const isInstructor = user?.email?.toLowerCase() === INSTRUCTOR_EMAIL.toLowerCase()
+  const isInstructor = INSTRUCTOR_EMAILS.map(e=>e.toLowerCase()).includes(user?.email?.toLowerCase()||"")
   const isSupport = allowData?.role === "support"
   const isParticipant = !isInstructor && !isSupport && allowData?.role !== "staff"
 
