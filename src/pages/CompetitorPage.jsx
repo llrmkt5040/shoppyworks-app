@@ -118,6 +118,17 @@ export default function CompetitorPage({ uid }) {
     setAnalyzing(false)
   }
 
+  async function deleteHistory(id, e) {
+    e.stopPropagation()
+    if (!confirm("この分析履歴を削除しますか？")) return
+    try {
+      const { db } = await import("../lib/firebase")
+      const { doc, deleteDoc } = await import("firebase/firestore")
+      await deleteDoc(doc(db, "competitor_analyses", id))
+      loadHistories()
+    } catch(e) { alert("削除エラー: " + e.message) }
+  }
+
   const tabStyle = (t) => ({
     padding:"0.5rem 1.2rem", border:"none", background:"transparent", cursor:"pointer",
     fontSize:"0.82rem", fontWeight:tab===t?700:400,
@@ -260,8 +271,14 @@ export default function CompetitorPage({ uid }) {
                     {h.shopData?.priceMin && <span>💰 ₱{h.shopData.priceMin}〜{h.shopData.priceMax}</span>}
                   </div>
                 </div>
-                <div style={{ fontSize:"0.65rem", color:"var(--dim2)", whiteSpace:"nowrap" }}>
-                  {h.createdAt?.slice(0,10)}
+                <div style={{ display:"flex", alignItems:"center", gap:"0.5rem" }}>
+                  <div style={{ fontSize:"0.65rem", color:"var(--dim2)", whiteSpace:"nowrap" }}>
+                    {h.createdAt?.slice(0,10)}
+                  </div>
+                  <button onClick={(e) => deleteHistory(h.id, e)}
+                    style={{ padding:"0.2rem 0.5rem", borderRadius:6, border:"1px solid rgba(239,68,68,0.3)", background:"rgba(239,68,68,0.08)", color:"#ef4444", fontSize:"0.68rem", cursor:"pointer" }}>
+                    🗑️
+                  </button>
                 </div>
               </div>
               {h.analysis?.summary && (
