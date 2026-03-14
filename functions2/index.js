@@ -71,3 +71,66 @@ exports.diaryReminder = onSchedule({ schedule: "0 12 * * *", secrets: [SENDGRID_
     console.error("Diaryリマインダーエラー:", e.message)
   }
 })
+
+const { onRequest } = require("firebase-functions/v2/https")
+const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY")
+
+exports.analyzeCompetitor = onRequest({
+  secrets: [ANTHROPIC_API_KEY],
+  cors: true,
+  timeoutSeconds: 120,
+}, async (req, res) => {
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" })
+  try {
+    const { urls, myShopUrl, mode } = req.body
+    if (!urls || urls.length === 0) return res.status(400).json({ error: "URLが必要です" })
+
+    const Anthropic = require("@anthropic-ai/sdk")
+    const client = new Anthropic.default({ apiKey: ANTHROPIC_API_KEY.value() })
+
+    // 各URLの情報をweb_searchで取得
+    const pageContents = []
+    for (const url of urls) {
+      try {
+        const searchRes = await client.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
+          messages: [{
+            role: "user",
+            content: `以下のShopeeショップページの情報を取得して、商品一覧・価格・レビュー数・評価・タイトルなどの情報を詳しく教えてください。URL: ${url}`
+          }]
+        })
+        const text = searchRes.content?.filter(c => c.type === "text").map(c => c.text).join("\n") || "取得失敗"
+        pageContents.push({ url, content: text })
+      } catch(e) {
+        pageContents.push({ url, content: `取得エラー: ${e.message}` })
+      }
+    }
+
+    // AI分析
+    const myShopContext = myShopUrl ? `\n\n【自社ショップURL】: ${myShopUrl}` : ""
+    const competitorContext = pageContents.map((p, i) =>
+      `【競合${i+1} URL】: ${p.url}\n【取得情報】:\n${p.content}`
+    ).join("\n\n---\n\n")
+
+    const analysisPrompt = mode === "single"
+      ? `以下の競合Shopeeショップを分析してください。${myShopContext}\n\n${competitorContext}\n\n以下の6項目について日本語で分析し、JSONのみ返してください（マークダウン不要）:\n{"pricing":"価格帯・値付け戦略の分析","lineup":"商品ラインナップ・カテゴリ構成の分析","seo":"タイトル・SEOキーワード戦略の分析","reviews":"レビュー・評価傾向の分析","swot":"強み・弱み・差別化ポイント","suggestions":"自社への具体的な改善提案","summary":"総合評価","shopName":"ショップ名（判明した場合）"}`
+      : `以下の${urls.length}つの競合Shopeeショップを比較分析してください。${myShopContext}\n\n${competitorContext}\n\n各ショップを比較し、JSONのみ返してください:\n{"pricing":"各ショップの価格戦略比較","lineup":"商品ラインナップ・構成の比較","seo":"SEO・タイトル戦略の比較","reviews":"レビュー・評価の比較","swot":"各ショップの強み・弱み比較","suggestions":"自社への具体的な改善提案","summary":"総合的な競合状況の評価","shopNames":"各ショップ名"}`
+
+    const analysisRes = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: analysisPrompt }]
+    })
+
+    const rawText = analysisRes.content?.filter(c => c.type === "text").map(c => c.text).join("") || "{}"
+    const cleaned = rawText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+    const parsed = JSON.parse(cleaned)
+
+    res.json({ success: true, analysis: parsed })
+  } catch(e) {
+    console.error("analyzeCompetitor error:", e)
+    res.status(500).json({ error: e.message })
+  }
+})
