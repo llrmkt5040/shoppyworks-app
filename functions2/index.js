@@ -45,21 +45,24 @@ exports.diaryReminder = onSchedule({ schedule: "0 12 * * *", secrets: [SENDGRID_
   try {
     const today = new Date()
     const jst = new Date(today.getTime() + 9 * 60 * 60 * 1000)
-    const todayStr = jst.toISOString().slice(0, 10)
+    // 前日の日付を計算
+    const yesterday = new Date(jst)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = yesterday.toISOString().slice(0, 10)
     const settingsSnap = await db.collection("user_settings").get()
     for (const settingDoc of settingsSnap.docs) {
       const setting = settingDoc.data()
       const uid = settingDoc.id
       const ownerEmail = setting?.notify_email
       if (!ownerEmail || !setting?.notify_diary) continue
-      const diarySnap = await db.collection("action_logs").where("uid", "==", uid).where("date", "==", todayStr).limit(1).get()
+      const diarySnap = await db.collection("action_logs").where("uid", "==", uid).where("date", "==", yesterdayStr).limit(1).get()
       if (diarySnap.empty) {
         const sg = getSendGrid()
         await sg.send({
           to: ownerEmail,
           from: { name: "ShoppyWorks BootCamp", email: FROM_EMAIL.value() || "noreply@shoppyworks.com" },
-          subject: "本日のShopeeDiaryがまだ未記録です",
-          html: "<h2>Diary未記録アラート</h2><p>本日（" + todayStr + "）のShopeeDiaryがまだ記録されていません。</p><a href='https://shoppyworks-bootcamp.web.app'>今すぐ記録する</a>"
+          subject: "前日のShopeeDiaryが未記録です",
+          html: "<h2>Diary未記録アラート</h2><p>前日（" + yesterdayStr + "）のShopeeDiaryがまだ記録されていません。</p><a href='https://shoppyworks-bootcamp.web.app'>今すぐ記録する</a>"
         })
         console.log("Diary未記録通知送信:", ownerEmail)
       }

@@ -208,6 +208,7 @@ export default function CockpitPage() {
 
       const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
       const jstToday = jstNow.toISOString().slice(0, 10)
+      const jstYesterday = new Date(jstNow.getTime() - 24*60*60*1000).toISOString().slice(0, 10)
       const thisMonth = jstToday.slice(0, 7)
       const dayOfMonth = parseInt(jstToday.slice(8, 10))
 
@@ -240,7 +241,7 @@ export default function CockpitPage() {
           const recordedDays = monthDiary.length
           diaryRate = dayOfMonth > 0 ? Math.round((recordedDays / dayOfMonth) * 100) : 0
 
-          recordedToday = diaryDocs.some(d=>d.date===jstToday)
+          recordedToday = diaryDocs.some(d=>d.date===jstYesterday)
           lastDate = diaryDocs[0]?.date || null
         }
 
@@ -318,7 +319,7 @@ export default function CockpitPage() {
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"0.78rem" }}>
               <thead>
                 <tr style={{ borderBottom:"1px solid var(--rim)" }}>
-                  {["受講生","今日の記録","連続記録","記録率","今月売上(¥)","今月注文数","最終記録日"].map((h,i) => (
+                  {["受講生","前日の記録","連続記録","記録率","今月売上(¥)","今月注文数","最終記録日"].map((h,i) => (
                     <th key={i} style={{ padding:"0.5rem 0.75rem", textAlign:i===0?"left":"center", fontSize:"0.65rem", color:"var(--dim2)", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
                   ))}
                 </tr>
