@@ -1182,7 +1182,9 @@ const REQUIRED_FIELDS = [
   { key:"listings",            label:"📦 出品点数（前日）",         group:"出品・改修" },
   { key:"improved_pages",      label:"🔧 改修ページ件数（前日）",   group:"出品・改修" },
   { key:"sales_php",           label:"💰 Sales (PHP)",             group:"売上・注文" },
+  { key:"sales_jpy",           label:"💴 売上 (円) 自動",            group:"売上・注文" },
   { key:"sales_rebate_php",    label:"🏷️ Sales Rebate (PHP)",      group:"売上・注文" },
+  { key:"sales_rebate_jpy",    label:"💴 Sales Rebate (円) 自動",   group:"売上・注文" },
   { key:"orders",              label:"📦 Orders（注文数）",         group:"売上・注文" },
   { key:"sales_deposit_usd",   label:"🏦 売上入金 USD",            group:"売上・注文" },
   { key:"visitors",            label:"👥 Visitors（訪問者数）",     group:"アクセス・転換率" },
@@ -1192,7 +1194,8 @@ const REQUIRED_FIELDS = [
   { key:"cv",                  label:"📈 CV（注文転換数）",         group:"アクセス・転換率" },
   { key:"cancelled",           label:"❌ キャンセル数",             group:"キャンセル・返金" },
   { key:"cancelled_sales",     label:"🚫 キャンセル売上 (PHP)",     group:"キャンセル・返金" },
-  { key:"returned",            label:"↩️ 返品数",                  group:"キャンセル・返金" },
+
+  { key:"shop_url",            label:"🏪 ショップURL",              group:"フォロー・評価" },
   { key:"followers",           label:"❤️ Followers（フォロワー数）",group:"フォロー・評価" },
   { key:"rating_stars",        label:"⭐ 評価数",                  group:"フォロー・評価" },
   { key:"rating",              label:"🌟 評価スコア",              group:"フォロー・評価" },
@@ -1302,12 +1305,25 @@ function HistoryTab({ logs, onDelete, onEdit, onSave, settings={} }) {
                   <div style={{fontSize:"0.65rem",fontWeight:700,color:"var(--dim2)",marginBottom:"0.5rem",textTransform:"uppercase",borderBottom:"1px solid var(--rim)",paddingBottom:"0.3rem"}}>{group}</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem"}}>
                     {fields.map(f => (
-                      <div key={f.key}>
+                      <div key={f.key} style={{gridColumn: f.key==="shop_url"?"1 / -1":"auto"}}>
                         <label style={{fontSize:"0.62rem",fontWeight:700,color:(!editForm[f.key]||editForm[f.key]==="0")?"#f59e0b":"var(--dim2)",display:"block",marginBottom:"0.2rem"}}>
                           {(!editForm[f.key]||editForm[f.key]==="0") ? "○ " : "✅ "}{f.label}
+                          {f.key==="shop_url" && editForm[f.key] && (
+                            <a href={editForm[f.key]} target="_blank" rel="noreferrer"
+                              style={{marginLeft:8,color:"var(--orange)",fontSize:"0.65rem",fontWeight:700}}>→ 開く</a>
+                          )}
                         </label>
-                        <input value={editForm[f.key]||""} onChange={e=>setEditForm(p=>({...p,[f.key]:e.target.value}))}
-                          style={{...inp}} />
+                        {f.key==="sales_jpy" || f.key==="sales_rebate_jpy" ? (
+                          <div style={{...inp, color:"#a78bfa", fontWeight:700, background:"rgba(167,139,250,0.08)"}}>
+                            {f.key==="sales_jpy"
+                              ? (editForm.sales_php && editForm.rate_php_jpy ? "¥"+Math.round(Number(editForm.sales_php)*Number(editForm.rate_php_jpy)).toLocaleString() : "－")
+                              : (editForm.sales_rebate_php && editForm.rate_php_jpy ? "¥"+Math.round(Number(editForm.sales_rebate_php)*Number(editForm.rate_php_jpy)).toLocaleString() : "－")
+                            }
+                          </div>
+                        ) : (
+                          <input value={editForm[f.key]||""} onChange={e=>setEditForm(p=>({...p,[f.key]:e.target.value}))}
+                            style={{...inp}} />
+                        )}
                       </div>
                     ))}
                   </div>
