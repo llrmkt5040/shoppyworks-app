@@ -796,6 +796,35 @@ function ImportTab({ uid, onImported }) {
   const [aiAdvice, setAiAdvice] = useState("")
   const [aiLoading, setAiLoading] = useState(false)
   const [voucherSummary, setVoucherSummary] = useState(null)
+  const [currentRate, setCurrentRate] = useState(null)
+  const [rateStatus, setRateStatus] = useState("")
+
+  async function fetchAndSaveRate() {
+    setRateStatus("取得中...")
+    try {
+      const res = await fetch("https://open.er-api.com/v6/latest/USD")
+      const json = await res.json()
+      const usdJpy = json?.rates?.JPY
+      const usdPhp = json?.rates?.PHP
+      if (usdJpy && usdPhp) {
+        const rate = ((1 / usdPhp) * usdJpy * 0.98).toFixed(4)
+        setCurrentRate(rate)
+        setRateStatus("✅ " + rate + " ₱/¥（取得済み）")
+        // fx_ratesに保存
+        const { db, auth } = await import("../lib/firebase")
+        const { doc, setDoc } = await import("firebase/firestore")
+        const effectiveUid = uid || auth.currentUser?.uid
+        await setDoc(doc(db, "fx_rates", effectiveUid), {
+          rate_php_jpy: rate, usd_jpy: usdJpy.toFixed(4), usd_php: usdPhp.toFixed(4),
+          updatedAt: new Date().toISOString()
+        })
+        return rate
+      }
+    } catch(e) {
+      setRateStatus("⚠️ 為替取得失敗（手動入力してください）")
+    }
+    return null
+  }
 
   async function parseBusinessInsights(file) {
     const XLSX = await import("xlsx")
@@ -884,6 +913,9 @@ function ImportTab({ uid, onImported }) {
     setVoucherSummary(null)
     setAiAdvice("")
     try {
+      // 為替レートを自動取得
+      const rate = await fetchAndSaveRate()
+
       let businessData = {}
       let voucherData = { dayMap: {}, summary: [] }
       if (files.business) businessData = await parseBusinessInsights(files.business)
@@ -891,7 +923,8 @@ function ImportTab({ uid, onImported }) {
       const allDates = new Set([...Object.keys(businessData), ...Object.keys(voucherData.dayMap)])
       const merged = Array.from(allDates).sort().map(date => ({
         date, ...businessData[date],
-        ...(voucherData.dayMap[date] || {})
+        ...(voucherData.dayMap[date] || {}),
+        rate_php_jpy: rate || undefined  // 為替レートを各日付データに付与
       })).filter(r => r.sales_php > 0 || r.orders > 0 || r.visitors > 0 || r.voucher_cost > 0)
       setPreview(merged)
     } catch(e) { setError("解析エラー: " + e.message) }
@@ -925,6 +958,7 @@ function ImportTab({ uid, onImported }) {
         setIfEmpty("returned", row.returned > 0 ? row.returned : null)
         setIfEmpty("cv", row.cvr)
         setIfEmpty("voucher_follow_prize", row.voucher_cost > 0 ? row.voucher_cost : null)
+        setIfEmpty("rate_php_jpy", row.rate_php_jpy)
         await setDoc(doc(db, "action_logs", docId), merged, { merge: true })
         count++
       }
@@ -993,10 +1027,17 @@ function ImportTab({ uid, onImported }) {
           })}
         </div>
         {error && <div style={{ color:"#ef4444", fontSize:"0.78rem", marginTop:"0.75rem" }}>⚠️ {error}</div>}
-        <button onClick={handleFiles}
-          style={{ marginTop:"1rem", padding:"0.55rem 1.5rem", borderRadius:8, border:"none", background:"var(--orange)", color:"#fff", fontSize:"0.82rem", fontWeight:700, cursor:"pointer" }}>
-          🔍 データを解析する
-        </button>
+        <div style={{ display:"flex", alignItems:"center", gap:"1rem", marginTop:"1rem", flexWrap:"wrap" }}>
+          <button onClick={handleFiles}
+            style={{ padding:"0.55rem 1.5rem", borderRadius:8, border:"none", background:"var(--orange)", color:"#fff", fontSize:"0.82rem", fontWeight:700, cursor:"pointer" }}>
+            🔍 データを解析する
+          </button>
+          {rateStatus && (
+            <div style={{ fontSize:"0.75rem", color:rateStatus.includes("✅")?"#22c55e":"var(--dim2)", fontWeight:600 }}>
+              💱 為替: {rateStatus}
+            </div>
+          )}
+        </div>
       </div>
 
       {preview.length > 0 && (
