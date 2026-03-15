@@ -69,10 +69,17 @@ export default function DashboardPage({ uid: propUid }) {
     try {
       const snap2 = await getDocs(collection(db, 'action_logs'))
       const uid2 = propUid || auth.currentUser?.uid || 'anonymous'
-      const allLogs = snap2.docs
+      const rawLogs = snap2.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(d => d.uid === uid2)
-        .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+      // 日付重複除去（ShopeeDiaryと同じロジック）
+      const dateMap = {}
+      rawLogs.forEach(d => {
+        const date = d.date || ""
+        if (!date) return
+        if (!dateMap[date]) dateMap[date] = d
+      })
+      const allLogs = Object.values(dateMap).sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       setDiaryLogs(allLogs.slice(0, 30))
       // 今月の集計
       // JST日付ヘルパー（UTC+9）
