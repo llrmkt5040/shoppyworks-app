@@ -170,18 +170,15 @@ export default function ActionLogPage({ uid: propUid }) {
       const q = query(collection(db, "action_logs"), where("uid", "==", propUid || auth.currentUser?.uid))
       const snap = await getDocs(q)
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-      // 日付重複除去: {uid}_{date}形式のIDを優先、なければ最初の1件
+      // 日付重複除去: 同じ日付は1件のみ表示（全形式対応）
       const dateMap = {}
       data.forEach(d => {
         const date = d.date || ""
         if (!date) return
-        const isNewFormat = d.id.includes("_" + date)
         if (!dateMap[date]) {
           dateMap[date] = d
-        } else {
-          // 新形式IDを優先、同じなら更新日時が新しい方を使用
-          if (isNewFormat) dateMap[date] = d
         }
+        // 既にある場合は何もしない（最初に見つかった1件を使用）
       })
       const deduped = Object.values(dateMap).sort((a, b) => (b.date || "").localeCompare(a.date || ""))
       setLogs(deduped)
