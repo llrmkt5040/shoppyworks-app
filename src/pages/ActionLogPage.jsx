@@ -276,7 +276,7 @@ export default function ActionLogPage({ uid: propUid }) {
     <div style={{maxWidth:960,margin:"0 auto",padding:"1.5rem"}}>
       <h2 style={{fontFamily:"Bebas Neue,sans-serif",fontSize:"1.8rem",letterSpacing:"0.04em",marginBottom:"1.5rem"}}>行動ログ</h2>
       <div style={{display:"flex",marginBottom:"1.5rem",background:"var(--surface)",borderRadius:12,padding:4,border:"1px solid var(--rim)",width:"fit-content"}}>
-        {[["input","入力"],["import","📊 データ取込"],["history","履歴"],["graph","グラフ"]].map(([id,label]) => (
+        {[["import","📊 データ取込"],["input","入力"],["history","履歴"],["graph","グラフ"]].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)} style={{padding:"0.5rem 1.2rem",borderRadius:10,border:"none",cursor:"pointer",fontSize:"0.8rem",fontWeight:700,background:tab===id?"var(--orange)":"transparent",color:tab===id?"#fff":"var(--dim2)",transition:"all 0.2s"}}>{label}</button>
         ))}
       </div>
@@ -778,319 +778,6 @@ function InventoryTab({ uid }) {
 // ========== データ取込タブ ==========
 function ImportTab({ uid, onImported }) {
   const [files, setFiles] = useState({ business: null, voucher: null })
-  const [preview, setPreview] = useState([]) // 日次データのプレビュー
-  const [importing, setImporting] = useState(false)
-  const [error, setError] = useState("")
-  const [aiAdvice, setAiAdvice] = useState("")
-  const [aiLoading, setAiLoading] = useState(false)
-  const [voucherSummary, setVoucherSummary] = useState(null)
-
-  async function parseBusinessInsights(file) {
-    const XLSX = await import("xlsx")
-    const buf = await file.arrayBuffer()
-    const wb = XLSX.read(buf)
-    const ws = wb.Sheets["Placed Order"]
-    if (!ws) throw new Error("Placed Orderシートが見つかりません")
-    const rows = XLSX.utils.sheet_to_json(ws, { header:1 })
-    // 日次データ行を探す（Time列がある行）
-    const timeHeaderIdx = rows.findIndex(r => r[0] === "Time")
-    if (timeHeaderIdx < 0) throw new Error("時系列データが見つかりません")
-    const headers = rows[timeHeaderIdx]
-    const dataRows = rows.slice(timeHeaderIdx + 1).filter(r => r[0] && String(r[0]).includes("/"))
-    const getIdx = (...names) => { for (const n of names) { const i = headers.findIndex(h => String(h||"").includes(n)); if (i>=0) return i } return -1 }
-    const salesIdx = getIdx("Sales (PHP)")
-    const rebateIdx = getIdx("Rebate")
-    const ordersIdx = getIdx("Orders")
-    const clicksIdx = getIdx("Product Clicks")
-    const visitorsIdx = getIdx("Visitors")
-    const cvrIdx = getIdx("Order Conversion")
-    const cancelIdx = getIdx("Cancelled Orders")
-    const cancelSalesIdx = getIdx("Cancelled Sales")
-    const returnIdx = getIdx("Returned")
-    const newBuyersIdx = getIdx("new buyers")
-    // 日付でグループ化（時間別→日次に集計）
-    const dayMap = {}
-    dataRows.forEach(r => {
-      const timeStr = String(r[0]||"")
-      const dateStr = timeStr.includes(" ") ? timeStr.split(" ")[0] : timeStr
-      // DD/MM/YYYY → YYYY-MM-DD
-      const parts = dateStr.split("/")
-      if (parts.length !== 3) return
-      const isoDate = parts[2] + "-" + parts[1].padStart(2,"0") + "-" + parts[0].padStart(2,"0")
-      if (!dayMap[isoDate]) dayMap[isoDate] = { sales_php:0, sales_rebate_php:0, orders:0, clicks:0, visitors:0, cancelled:0, cancelled_sales:0, returned:0, new_buyers:0, cvr_sum:0, cvr_count:0 }
-      const d = dayMap[isoDate]
-      d.sales_php += Number(String(r[salesIdx]||"0").replace(/,/g,"")) || 0
-      d.sales_rebate_php += Number(String(r[rebateIdx]||"0").replace(/,/g,"")) || 0
-      d.orders += Number(String(r[ordersIdx]||"0").replace(/,/g,"")) || 0
-      d.clicks += Number(String(r[clicksIdx]||"0").replace(/,/g,"")) || 0
-      d.visitors += Number(String(r[visitorsIdx]||"0").replace(/,/g,"")) || 0
-      d.cancelled += Number(String(r[cancelIdx]||"0").replace(/,/g,"")) || 0
-      d.cancelled_sales += Number(String(r[cancelSalesIdx]||"0").replace(/,/g,"")) || 0
-      d.returned += Number(String(r[returnIdx]||"0").replace(/,/g,"")) || 0
-      d.new_buyers += Number(String(r[newBuyersIdx]||"0").replace(/,/g,"")) || 0
-      const cvrVal = parseFloat(String(r[cvrIdx]||"0").replace("%","")) || 0
-      if (cvrVal > 0) { d.cvr_sum += cvrVal; d.cvr_count++ }
-    })
-    // CVR平均を計算
-    Object.values(dayMap).forEach(d => { d.cvr = d.cvr_count > 0 ? (d.cvr_sum / d.cvr_count).toFixed(2) : "0" })
-    return dayMap
-  }
-
-  async function parseVoucher(file) {
-    const XLSX = await import("xlsx")
-    const buf = await file.arrayBuffer()
-    const wb = XLSX.read(buf)
-    const ws = wb.Sheets["Metric Trends"]
-    if (!ws) throw new Error("Metric Trendsシートが見つかりません")
-    const rows = XLSX.utils.sheet_to_json(ws, { header:1 })
-    const headerIdx = rows.findIndex(r => r[0] === "Time Period")
-    if (headerIdx < 0) throw new Error("Time Period列が見つかりません")
-    const headers = rows[headerIdx]
-    const dataRows = rows.slice(headerIdx + 1).filter(r => r[0])
-    const costIdx = headers.findIndex(h => String(h||"").includes("Cost (Confirmed"))
-    const claimsIdx = headers.findIndex(h => String(h||"") === "Claims")
-    // Metric Trendsは日次（DD/MM/YYYY形式）
-    const dayMap = {}
-    dataRows.forEach(r => {
-      const dateStr = String(r[0]||"")
-      const parts = dateStr.split("/")
-      if (parts.length !== 3) return
-      const isoDate = parts[2] + "-" + parts[1].padStart(2,"0") + "-" + parts[0].padStart(2,"0")
-      dayMap[isoDate] = {
-        voucher_cost: Number(String(r[costIdx]||"0").replace(/,/g,"")) || 0,
-        voucher_claims: Number(String(r[claimsIdx]||"0").replace(/,/g,"")) || 0,
-      }
-    })
-    // Performance Listからバウチャー種別コストを取得
-    const ws2 = wb.Sheets["Performance List"]
-    const rows2 = ws2 ? XLSX.utils.sheet_to_json(ws2, { header:1 }) : []
-    const hIdx2 = rows2.findIndex(r => r[0] === "Voucher Name")
-    const perfData = hIdx2 >= 0 ? rows2.slice(hIdx2+1).filter(r=>r[0]) : []
-    const summary = perfData.map(r => ({
-      name: r[0], code: r[1], type: r[5],
-      claims: r[7], orders: r[9],
-      sales: r[13], cost: r[15],
-      usageRate: r[11], newFollowers: r[24]
-    }))
-    return { dayMap, summary }
-  }
-
-  async function handleFiles() {
-    setError("")
-    try {
-      let businessData = {}
-      let voucherData = { dayMap: {}, summary: [] }
-      if (files.business) businessData = await parseBusinessInsights(files.business)
-      if (files.voucher) {
-        voucherData = await parseVoucher(files.voucher)
-        setVoucherSummary(voucherData.summary)
-      }
-      // 全日付をマージ
-      const allDates = new Set([...Object.keys(businessData), ...Object.keys(voucherData.dayMap)])
-      const merged = Array.from(allDates).sort().map(date => ({
-        date,
-        ...businessData[date],
-        ...(voucherData.dayMap[date] ? {
-          voucher_cost: voucherData.dayMap[date].voucher_cost,
-          voucher_claims: voucherData.dayMap[date].voucher_claims,
-        } : {})
-      }))
-      setPreview(merged)
-    } catch(e) { setError("解析エラー: " + e.message) }
-  }
-
-  async function importToDiary() {
-    if (preview.length === 0) return
-    setImporting(true)
-    try {
-      const { db, auth } = await import("../lib/firebase")
-      const { doc, getDoc, setDoc } = await import("firebase/firestore")
-      const effectiveUid = uid || auth.currentUser?.uid
-      let count = 0
-      for (const row of preview) {
-        if (!row.date) continue
-        const docId = effectiveUid + "_" + row.date
-        const existing = await getDoc(doc(db, "action_logs", docId))
-        const existingData = existing.exists() ? existing.data() : {}
-        const merged = {
-          ...existingData,
-          uid: effectiveUid,
-          date: row.date,
-        }
-        // Business Insightsデータ（既存値がある場合は上書きしない）
-        if (row.sales_php > 0) merged.sales_php = String(row.sales_php)
-        if (row.sales_rebate_php > 0) merged.sales_rebate_php = String(row.sales_rebate_php)
-        if (row.orders > 0) merged.orders = String(row.orders)
-        if (row.clicks > 0) merged.clicks = String(row.clicks)
-        if (row.visitors > 0) merged.visitors = String(row.visitors)
-        if (row.cancelled > 0) merged.cancelled = String(row.cancelled)
-        if (row.cancelled_sales > 0) merged.cancelled_sales = String(row.cancelled_sales)
-        if (row.returned > 0) merged.returned = String(row.returned)
-        if (row.cvr) merged.cv = row.cvr
-        // バウチャーデータ
-        if (row.voucher_cost > 0) merged.voucher_follow_prize = String(row.voucher_cost)
-        await setDoc(doc(db, "action_logs", docId), merged, { merge: true })
-        count++
-      }
-      alert("✅ " + count + "日分のデータをShopeeDiaryに反映しました！")
-      onImported()
-    } catch(e) { alert("インポートエラー: " + e.message) }
-    setImporting(false)
-  }
-
-  async function getAiAdvice() {
-    if (!voucherSummary || voucherSummary.length === 0) return
-    setAiLoading(true)
-    try {
-      const summaryText = voucherSummary.map(v =>
-        `【${v.name}】種別:${v.type} クレーム:${v.claims} 注文:${v.orders} 売上:₱${v.sales} コスト:₱${v.cost} 利用率:${v.usageRate} 新規フォロワー:${v.newFollowers||"-"}`
-      ).join("\n")
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{
-            role: "user",
-            content: `以下のShopeeバウチャーパフォーマンスデータを分析して、日本語で販促戦略アドバイスをしてください。\n\n${summaryText}\n\n以下の観点で分析してください：\n1. 各バウチャーの費用対効果\n2. 最も効果的だったバウチャー\n3. 改善が必要なバウチャー\n4. 次回の販促戦略の提案（具体的に）\n5. 新規顧客獲得 vs リピーター育成のバランス`
-          }]
-        })
-      })
-      const data = await res.json()
-      const text = data.content?.filter(c=>c.type==="text").map(c=>c.text).join("") || "分析失敗"
-      setAiAdvice(text)
-    } catch(e) { setAiAdvice("AIアドバイス取得エラー: " + e.message) }
-    setAiLoading(false)
-  }
-
-  const inp = { padding:"0.5rem 0.7rem", borderRadius:8, border:"1px solid var(--rim)", background:"var(--surface)", color:"var(--text)", fontSize:"0.85rem" }
-
-  return (
-    <div style={{ display:"flex", flexDirection:"column", gap:"1rem" }}>
-      {/* ファイルアップロード */}
-      <div className="card" style={{ padding:"1.25rem" }}>
-        <div style={{ fontWeight:700, fontSize:"0.9rem", marginBottom:"1rem" }}>📂 Shopeeレポートをまとめてアップロード</div>
-        <div style={{ fontSize:"0.75rem", color:"var(--dim2)", marginBottom:"1rem", lineHeight:1.7 }}>
-          Past 30 Daysで取得したファイルをアップロードすると、ShopeeDiaryに自動反映されます。
-        </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:"0.75rem" }}>
-          {[
-            { key:"business", label:"📊 Business Insights XLSX", desc:"Visitors・Clicks・CVR・売上・注文数", accept:".xlsx,.xls" },
-            { key:"voucher", label:"🎫 マーケティングレポート XLSX", desc:"バウチャー日次コスト・クレーム数", accept:".xlsx,.xls" },
-          ].map(f => (
-            <label key={f.key} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", border:`1.5px dashed ${files[f.key]?"rgba(34,197,94,0.5)":"var(--rim)"}`, borderRadius:10, cursor:"pointer", background:files[f.key]?"rgba(34,197,94,0.05)":"transparent" }}>
-              <span style={{ fontSize:20 }}>{files[f.key]?"✅":"📂"}</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:"0.82rem", fontWeight:700, color:files[f.key]?"#22c55e":"var(--text)" }}>{f.label}</div>
-                <div style={{ fontSize:"0.68rem", color:"var(--dim2)", marginTop:2 }}>
-                  {files[f.key] ? files[f.key].name : f.desc}
-                </div>
-              </div>
-              <input type="file" accept={f.accept} style={{ display:"none" }}
-                onChange={e => { if(e.target.files[0]) setFiles(prev=>({...prev,[f.key]:e.target.files[0]})) }} />
-            </label>
-          ))}
-        </div>
-        {error && <div style={{ color:"#ef4444", fontSize:"0.78rem", marginTop:"0.75rem" }}>⚠️ {error}</div>}
-        <div style={{ display:"flex", gap:"0.5rem", marginTop:"1rem" }}>
-          <button onClick={handleFiles} disabled={!files.business && !files.voucher}
-            style={{ padding:"0.55rem 1.5rem", borderRadius:8, border:"none", background:"var(--orange)", color:"#fff", fontSize:"0.82rem", fontWeight:700, cursor:"pointer", opacity:(!files.business&&!files.voucher)?0.5:1 }}>
-            🔍 データを解析する
-          </button>
-        </div>
-      </div>
-
-      {/* プレビュー */}
-      {preview.length > 0 && (
-        <div className="card" style={{ padding:"1.25rem" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"0.75rem" }}>
-            <div style={{ fontWeight:700, fontSize:"0.9rem" }}>📋 取込プレビュー（{preview.length}日分）</div>
-            <button onClick={importToDiary} disabled={importing}
-              style={{ padding:"0.5rem 1.5rem", borderRadius:8, border:"none", background:"var(--orange)", color:"#fff", fontSize:"0.82rem", fontWeight:700, cursor:importing?"not-allowed":"pointer", opacity:importing?0.7:1 }}>
-              {importing ? "反映中..." : "✅ ShopeeDiaryに反映する"}
-            </button>
-          </div>
-          <div style={{ overflowX:"auto", maxHeight:320, overflowY:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"0.75rem" }}>
-              <thead style={{ position:"sticky", top:0, background:"var(--surface)" }}>
-                <tr style={{ borderBottom:"1px solid var(--rim)" }}>
-                  {["日付","売上(₱)","注文数","Visitors","Clicks","CVR","キャンセル","バウチャー費"].map(h=>(
-                    <th key={h} style={{ padding:"0.4rem 0.6rem", textAlign:h==="日付"?"left":"right", color:"var(--dim2)", fontSize:"0.62rem", whiteSpace:"nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {preview.map((r,i)=>(
-                  <tr key={i} style={{ borderBottom:"1px solid var(--rim)" }}>
-                    <td style={{ padding:"0.4rem 0.6rem", fontWeight:600 }}>{r.date}</td>
-                    <td style={{ padding:"0.4rem 0.6rem", textAlign:"right", color:"var(--orange)" }}>{r.sales_php>0?`₱${r.sales_php.toLocaleString()}`:"-"}</td>
-                    <td style={{ padding:"0.4rem 0.6rem", textAlign:"right" }}>{r.orders>0?r.orders:"-"}</td>
-                    <td style={{ padding:"0.4rem 0.6rem", textAlign:"right" }}>{r.visitors>0?r.visitors.toLocaleString():"-"}</td>
-                    <td style={{ padding:"0.4rem 0.6rem", textAlign:"right" }}>{r.clicks>0?r.clicks.toLocaleString():"-"}</td>
-                    <td style={{ padding:"0.4rem 0.6rem", textAlign:"right" }}>{r.cvr?r.cvr+"%":"-"}</td>
-                    <td style={{ padding:"0.4rem 0.6rem", textAlign:"right", color:r.cancelled>0?"#ef4444":"var(--dim2)" }}>{r.cancelled>0?r.cancelled:"-"}</td>
-                    <td style={{ padding:"0.4rem 0.6rem", textAlign:"right", color:r.voucher_cost>0?"#f59e0b":"var(--dim2)" }}>{r.voucher_cost>0?`₱${r.voucher_cost}`:"-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* バウチャー分析・AIアドバイス */}
-      {voucherSummary && voucherSummary.length > 0 && (
-        <div className="card" style={{ padding:"1.25rem" }}>
-          <div style={{ fontWeight:700, fontSize:"0.9rem", marginBottom:"0.75rem" }}>🎫 バウチャーパフォーマンス</div>
-          <div style={{ overflowX:"auto", marginBottom:"1rem" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"0.75rem" }}>
-              <thead>
-                <tr style={{ borderBottom:"1px solid var(--rim)" }}>
-                  {["バウチャー名","種別","クレーム","注文","売上(₱)","コスト(₱)","利用率","ROI"].map(h=>(
-                    <th key={h} style={{ padding:"0.4rem 0.6rem", textAlign:h==="バウチャー名"||h==="種別"?"left":"right", color:"var(--dim2)", fontSize:"0.62rem", whiteSpace:"nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {voucherSummary.map((v,i)=>{
-                  const roi = v.cost>0 ? ((v.sales-v.cost)/v.cost*100).toFixed(0) : "-"
-                  return (
-                    <tr key={i} style={{ borderBottom:"1px solid var(--rim)" }}>
-                      <td style={{ padding:"0.4rem 0.6rem", fontWeight:600 }}>{v.name}</td>
-                      <td style={{ padding:"0.4rem 0.6rem", fontSize:"0.68rem", color:"var(--dim2)" }}>{v.type?.replace(" Voucher","")}</td>
-                      <td style={{ padding:"0.4rem 0.6rem", textAlign:"right" }}>{v.claims}</td>
-                      <td style={{ padding:"0.4rem 0.6rem", textAlign:"right" }}>{v.orders}</td>
-                      <td style={{ padding:"0.4rem 0.6rem", textAlign:"right", color:"var(--orange)" }}>₱{Number(String(v.sales||0).replace(/,/g,"")).toLocaleString()}</td>
-                      <td style={{ padding:"0.4rem 0.6rem", textAlign:"right", color:"#ef4444" }}>₱{Number(String(v.cost||0).replace(/,/g,"")).toLocaleString()}</td>
-                      <td style={{ padding:"0.4rem 0.6rem", textAlign:"right" }}>{v.usageRate}</td>
-                      <td style={{ padding:"0.4rem 0.6rem", textAlign:"right", fontWeight:700, color:Number(roi)>500?"#22c55e":Number(roi)>100?"var(--orange)":"#ef4444" }}>
-                        {roi !== "-" ? roi+"%" : "-"}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <button onClick={getAiAdvice} disabled={aiLoading}
-            style={{ padding:"0.55rem 1.5rem", borderRadius:8, border:"none", background:"var(--orange)", color:"#fff", fontSize:"0.82rem", fontWeight:700, cursor:aiLoading?"not-allowed":"pointer", opacity:aiLoading?0.7:1 }}>
-            {aiLoading ? "🤖 AI分析中..." : "🤖 AIに販促戦略を相談する"}
-          </button>
-          {aiAdvice && (
-            <div style={{ marginTop:"1rem", padding:"1rem", background:"rgba(249,115,22,0.06)", borderRadius:10, border:"1px solid rgba(249,115,22,0.2)", fontSize:"0.82rem", lineHeight:1.8, whiteSpace:"pre-wrap" }}>
-              <div style={{ fontSize:"0.65rem", fontWeight:700, color:"var(--orange)", marginBottom:"0.5rem", textTransform:"uppercase" }}>🤖 AIアドバイス</div>
-              {aiAdvice}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ImportTab({ uid, onImported }) {
-  const [files, setFiles] = useState({ business: null, voucher: null })
   const [preview, setPreview] = useState([])
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState("")
@@ -1262,17 +949,24 @@ function ImportTab({ uid, onImported }) {
           {[
             { key:"business", label:"📊 Business Insights XLSX", desc:"Visitors・Clicks・CVR・売上・注文数が自動入力されます" },
             { key:"voucher", label:"🎫 マーケティングレポート XLSX", desc:"バウチャーコスト・クレーム数 + AI販促アドバイス" },
-          ].map(f => (
-            <label key={f.key} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", border:`1.5px dashed ${files[f.key]?"rgba(34,197,94,0.5)":"var(--rim)"}`, borderRadius:10, cursor:"pointer", background:files[f.key]?"rgba(34,197,94,0.05)":"transparent" }}>
-              <span style={{ fontSize:20 }}>{files[f.key]?"✅":"📂"}</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:"0.82rem", fontWeight:700, color:files[f.key]?"#22c55e":"var(--text)" }}>{f.label}</div>
-                <div style={{ fontSize:"0.68rem", color:"var(--dim2)", marginTop:2 }}>{files[f.key] ? files[f.key].name : f.desc}</div>
+          ].map(f => {
+            const inputId = "file-upload-" + f.key
+            return (
+              <div key={f.key} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", border:`1.5px dashed ${files[f.key]?"rgba(34,197,94,0.5)":"var(--rim)"}`, borderRadius:10, background:files[f.key]?"rgba(34,197,94,0.05)":"transparent" }}>
+                <span style={{ fontSize:20 }}>{files[f.key]?"✅":"📂"}</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:"0.82rem", fontWeight:700, color:files[f.key]?"#22c55e":"var(--text)" }}>{f.label}</div>
+                  <div style={{ fontSize:"0.68rem", color:"var(--dim2)", marginTop:2 }}>{files[f.key] ? files[f.key].name : f.desc}</div>
+                </div>
+                <input type="file" id={inputId} accept=".xlsx,.xls" style={{ display:"none" }}
+                  onChange={e => { if(e.target.files[0]) setFiles(prev=>({...prev,[f.key]:e.target.files[0]})) }} />
+                <button onClick={() => document.getElementById(inputId).click()}
+                  style={{ padding:"0.4rem 0.8rem", borderRadius:8, border:"1px solid var(--rim)", background:"var(--surface)", color:"var(--text)", fontSize:"0.75rem", cursor:"pointer", whiteSpace:"nowrap" }}>
+                  {files[f.key] ? "変更" : "選択"}
+                </button>
               </div>
-              <input type="file" accept=".xlsx,.xls" style={{ display:"none" }}
-                onChange={e => { if(e.target.files[0]) setFiles(prev=>({...prev,[f.key]:e.target.files[0]})) }} />
-            </label>
-          ))}
+            )
+          })}
         </div>
         {error && <div style={{ color:"#ef4444", fontSize:"0.78rem", marginTop:"0.75rem" }}>⚠️ {error}</div>}
         <button onClick={handleFiles} disabled={!files.business && !files.voucher}
