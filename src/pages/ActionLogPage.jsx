@@ -785,6 +785,29 @@ function InventoryTab({ uid }) {
   )
 }
 
+// ショップURLリンクボタン
+function ShopLinkButton({ uid }) {
+  const [shopUrl, setShopUrl] = useState("")
+  useEffect(() => {
+    async function load() {
+      try {
+        const { db } = await import("../lib/firebase")
+        const { doc, getDoc } = await import("firebase/firestore")
+        const snap = await getDoc(doc(db, "user_settings", uid))
+        if (snap.exists() && snap.data().shop_url) setShopUrl(snap.data().shop_url)
+      } catch(e) {}
+    }
+    if (uid) load()
+  }, [uid])
+  if (!shopUrl) return <span style={{ color:"var(--dim2)" }}>（設定→ショップURLを登録してください）</span>
+  return (
+    <a href={shopUrl} target="_blank" rel="noreferrer"
+      style={{ color:"var(--orange)", fontWeight:700, textDecoration:"none" }}>
+      🏪 ショップページを開く →
+    </a>
+  )
+}
+
 // ========== データ取込タブ ==========
 function ImportTab({ uid, onImported }) {
   const [files, setFiles] = useState({ business: null, voucher: null })
@@ -1019,7 +1042,8 @@ function ImportTab({ uid, onImported }) {
         <div style={{ fontSize:"0.72rem", color:"var(--dim2)", marginBottom:"1rem", padding:"0.75rem", background:"rgba(59,130,246,0.06)", borderRadius:8, border:"1px solid rgba(59,130,246,0.2)", lineHeight:1.8 }}>
           <strong style={{ color:"#3b82f6" }}>📥 Shopeeからダウンロードするファイル：</strong><br/>
           1. Marketing Centre → Vouchers → Export（Past 30 Days）<br/>
-          2. Data Centre → Business Insights → Export（Past 30 Days）
+          2. Data Centre → Business Insights → Export（Past 30 Days）<br/>
+          3. 集客数値（フォロワー・評価等）は <ShopLinkButton uid={uid} /> で確認
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:"0.75rem" }}>
           {[
@@ -1170,7 +1194,7 @@ const REQUIRED_FIELDS = [
   { key:"spo",                label:"SPO(₱)",             group:"トラフィック" },
   { key:"followers",          label:"フォロワー数",        group:"集客" },
   { key:"follow_prize",       label:"フォロープライズ",    group:"集客" },
-  { key:"usage",              label:"バウチャー利用数",    group:"集客" },
+
   { key:"rating_stars",       label:"評価★",              group:"集客" },
   { key:"rating",             label:"評価数",             group:"集客" },
   { key:"voucher_follow_prize",label:"バウチャーコスト(₱)", group:"バウチャー" },
