@@ -276,7 +276,7 @@ export default function ActionLogPage({ uid: propUid }) {
     <div style={{maxWidth:960,margin:"0 auto",padding:"1.5rem"}}>
       <h2 style={{fontFamily:"Bebas Neue,sans-serif",fontSize:"1.8rem",letterSpacing:"0.04em",marginBottom:"1.5rem"}}>行動ログ</h2>
       <div style={{display:"flex",marginBottom:"1.5rem",background:"var(--surface)",borderRadius:12,padding:4,border:"1px solid var(--rim)",width:"fit-content"}}>
-        {[["import","📊 データ取込"],["input","入力"],["history","履歴"],["graph","グラフ"]].map(([id,label]) => (
+        {[["import","📊 データ取込"],["history","履歴"],["graph","グラフ"]].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)} style={{padding:"0.5rem 1.2rem",borderRadius:10,border:"none",cursor:"pointer",fontSize:"0.8rem",fontWeight:700,background:tab===id?"var(--orange)":"transparent",color:tab===id?"#fff":"var(--dim2)",transition:"all 0.2s"}}>{label}</button>
         ))}
       </div>
@@ -500,7 +500,7 @@ export default function ActionLogPage({ uid: propUid }) {
       )}
 
       {tab === "history" && (
-        <HistoryTab logs={logs} onDelete={async (id) => {
+        <HistoryTab logs={logs} onSave={() => fetchLogs()} onDelete={async (id) => {
           if (!confirm("削除しますか？")) return
           try {
             await deleteDoc(doc(db, "action_logs", id))
@@ -900,17 +900,21 @@ function ImportTab({ uid, onImported }) {
         const docId = effectiveUid + "_" + row.date
         const existing = await getDoc(doc(db, "action_logs", docId))
         const existingData = existing.exists() ? existing.data() : {}
+        // 既存値がない場合のみ自動入力（手入力済みは上書きしない）
+        const setIfEmpty = (key, val) => {
+          if (val && !existingData[key]) merged[key] = String(val)
+        }
         const merged = { ...existingData, uid: effectiveUid, date: row.date }
-        if (row.sales_php > 0) merged.sales_php = String(row.sales_php)
-        if (row.sales_rebate_php > 0) merged.sales_rebate_php = String(row.sales_rebate_php)
-        if (row.orders > 0) merged.orders = String(row.orders)
-        if (row.clicks > 0) merged.clicks = String(row.clicks)
-        if (row.visitors > 0) merged.visitors = String(row.visitors)
-        if (row.cancelled > 0) merged.cancelled = String(row.cancelled)
-        if (row.cancelled_sales > 0) merged.cancelled_sales = String(row.cancelled_sales)
-        if (row.returned > 0) merged.returned = String(row.returned)
-        if (row.cvr) merged.cv = row.cvr
-        if (row.voucher_cost > 0) merged.voucher_follow_prize = String(row.voucher_cost)
+        setIfEmpty("sales_php", row.sales_php > 0 ? row.sales_php : null)
+        setIfEmpty("sales_rebate_php", row.sales_rebate_php > 0 ? row.sales_rebate_php : null)
+        setIfEmpty("orders", row.orders > 0 ? row.orders : null)
+        setIfEmpty("clicks", row.clicks > 0 ? row.clicks : null)
+        setIfEmpty("visitors", row.visitors > 0 ? row.visitors : null)
+        setIfEmpty("cancelled", row.cancelled > 0 ? row.cancelled : null)
+        setIfEmpty("cancelled_sales", row.cancelled_sales > 0 ? row.cancelled_sales : null)
+        setIfEmpty("returned", row.returned > 0 ? row.returned : null)
+        setIfEmpty("cv", row.cvr)
+        setIfEmpty("voucher_follow_prize", row.voucher_cost > 0 ? row.voucher_cost : null)
         await setDoc(doc(db, "action_logs", docId), merged, { merge: true })
         count++
       }
@@ -1078,31 +1082,120 @@ function ImportTab({ uid, onImported }) {
   )
 }
 
-function HistoryTab({ logs, onDelete, onEdit }) {
+// 未入力チェック対象フィールド
+const REQUIRED_FIELDS = [
+  { key:"listings",       label:"出品数",         group:"基本" },
+  { key:"sales_php",      label:"売上(₱)",         group:"売上" },
+  { key:"orders",         label:"注文数",           group:"売上" },
+  { key:"visitors",       label:"Visitors",        group:"トラフィック" },
+  { key:"clicks",         label:"Clicks",          group:"トラフィック" },
+  { key:"cv",             label:"CVR(%)",           group:"トラフィック" },
+  { key:"followers",      label:"フォロワー数",      group:"基本" },
+  { key:"rate_php_jpy",   label:"為替レート",        group:"基本" },
+]
+
+function getMissingFields(log) {
+  return REQUIRED_FIELDS.filter(f => !log[f.key] || log[f.key] === "0" || log[f.key] === "")
+}
+
+function HistoryTab({ logs, onDelete, onEdit, onSave }) {
+  const [editLog, setEditLog] = useState(null)
+  const [editForm, setEditForm] = useState({})
+
+  function openPopup(log) {
+    setEditLog(log)
+    setEditForm({ ...log })
+  }
+
+  async function savePopup() {
+    if (!editLog) return
+    try {
+      const { db } = await import("../lib/firebase")
+      const { doc, setDoc } = await import("firebase/firestore")
+      await setDoc(doc(db, "action_logs", editLog.id), editForm, { merge: true })
+      onSave && onSave()
+      setEditLog(null)
+    } catch(e) { alert("保存エラー: " + e.message) }
+  }
+
   if (logs.length === 0) return (
-    <div className="card" style={{padding:"2rem",textAlign:"center",color:"var(--dim2)"}}>まだデータがありません</div>
+    <div className="card" style={{padding:"2rem",textAlign:"center",color:"var(--dim2)"}}>まだデータがありません。📊 データ取込タブからXLSXをアップロードしてください。</div>
   )
+
+  const inp = { padding:"0.45rem 0.7rem", borderRadius:8, border:"1px solid var(--rim)", background:"var(--surface)", color:"var(--text)", fontSize:"0.82rem", width:"100%", boxSizing:"border-box" }
+
   return (
     <div>
-      {logs.map(log => (
-        <div key={log.id} className="card" style={{padding:"1rem 1.25rem",marginBottom:"0.75rem"}}>
-          <div style={{display:"flex",alignItems:"center",gap:"1rem",flexWrap:"wrap"}}>
-            <div style={{fontFamily:"Bebas Neue,sans-serif",fontSize:"1.4rem",color:"var(--orange)",minWidth:90}}>{log.date}</div>
-            <div style={{display:"flex",gap:"1rem",flexWrap:"wrap",fontSize:"0.82rem",flex:1}}>
-              <span>Sales ₱{Number(log.sales_php||0).toLocaleString()}</span>
-              <span>円 {Number(log.sales_jpy||0).toLocaleString()}</span>
-              <span>出品 {log.listings||0}点</span>
-              <span>Orders {log.orders||0}</span>
-              <span>OCR {log.ocr||0}%</span>
+      {logs.map(log => {
+        const missing = getMissingFields(log)
+        const hasWarning = missing.length > 0
+        return (
+          <div key={log.id} className="card" style={{padding:"1rem 1.25rem",marginBottom:"0.75rem",border:hasWarning?"1px solid rgba(249,115,22,0.3)":"1px solid var(--rim)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"1rem",flexWrap:"wrap"}}>
+              <div style={{fontFamily:"Bebas Neue,sans-serif",fontSize:"1.4rem",color:"var(--orange)",minWidth:90}}>{log.date}</div>
+              <div style={{display:"flex",gap:"0.75rem",flexWrap:"wrap",fontSize:"0.82rem",flex:1}}>
+                <span style={{color:log.sales_php?"var(--text)":"#ef4444"}}>₱{Number(log.sales_php||0).toLocaleString()}</span>
+                <span style={{color:log.orders?"var(--text)":"var(--dim2)"}}>📦{log.orders||"-"}</span>
+                <span style={{color:log.visitors?"var(--text)":"var(--dim2)"}}>👁{Number(log.visitors||0).toLocaleString()}</span>
+                <span style={{color:log.cv?"var(--text)":"var(--dim2)"}}>CVR {log.cv||"-"}%</span>
+                <span style={{color:log.listings?"var(--text)":"var(--dim2)"}}>🏪{log.listings||"-"}点</span>
+              </div>
+              <div style={{display:"flex",gap:"0.5rem",alignItems:"center"}}>
+                {hasWarning && (
+                  <button onClick={()=>openPopup(log)}
+                    style={{padding:"0.3rem 0.8rem",borderRadius:6,border:"1px solid rgba(249,115,22,0.4)",background:"rgba(249,115,22,0.12)",color:"var(--orange)",fontSize:"0.72rem",cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                    ⚠️ 未入力 {missing.length}項目
+                  </button>
+                )}
+                {!hasWarning && (
+                  <span style={{fontSize:"0.7rem",color:"#22c55e",fontWeight:700}}>✅ 完了</span>
+                )}
+                <button onClick={()=>openPopup(log)} style={{padding:"0.3rem 0.7rem",borderRadius:6,border:"1px solid rgba(99,102,241,0.3)",background:"rgba(99,102,241,0.1)",color:"#818cf8",fontSize:"0.72rem",cursor:"pointer",fontWeight:700}}>✏️</button>
+                <button onClick={()=>onDelete(log.id)} style={{padding:"0.3rem 0.7rem",borderRadius:6,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.1)",color:"#ef4444",fontSize:"0.72rem",cursor:"pointer",fontWeight:700}}>🗑️</button>
+              </div>
             </div>
-            <div style={{display:"flex",gap:"0.5rem"}}>
-              <button onClick={() => onEdit(log)} style={{padding:"0.3rem 0.7rem",borderRadius:6,border:"1px solid rgba(99,102,241,0.3)",background:"rgba(99,102,241,0.1)",color:"#818cf8",fontSize:"0.72rem",cursor:"pointer",fontWeight:700}}>✏️ 編集</button>
-              <button onClick={() => onDelete(log.id)} style={{padding:"0.3rem 0.7rem",borderRadius:6,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.1)",color:"#ef4444",fontSize:"0.72rem",cursor:"pointer",fontWeight:700}}>🗑️ 削除</button>
+            {log.memo && <div style={{marginTop:"0.5rem",fontSize:"0.78rem",color:"var(--dim2)",borderTop:"1px solid var(--rim)",paddingTop:"0.5rem"}}>{log.memo}</div>}
+          </div>
+        )
+      })}
+
+      {/* 未入力ポップアップ */}
+      {editLog && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}
+          onClick={e=>{if(e.target===e.currentTarget)setEditLog(null)}}>
+          <div style={{background:"var(--bg)",borderRadius:16,padding:"1.5rem",width:"100%",maxWidth:560,maxHeight:"85vh",overflowY:"auto",border:"1px solid var(--rim)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
+              <div>
+                <div style={{fontWeight:800,fontSize:"1rem",color:"var(--orange)"}}>{editLog.date}</div>
+                <div style={{fontSize:"0.72rem",color:"var(--dim2)",marginTop:2}}>
+                  {getMissingFields(editLog).length > 0 ? `⚠️ ${getMissingFields(editLog).length}項目が未入力です` : "✅ すべて入力済み"}
+                </div>
+              </div>
+              <button onClick={()=>setEditLog(null)} style={{background:"transparent",border:"none",color:"var(--dim2)",fontSize:"1.2rem",cursor:"pointer"}}>✕</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"1.25rem"}}>
+              {REQUIRED_FIELDS.map(f => (
+                <div key={f.key}>
+                  <label style={{fontSize:"0.62rem",fontWeight:700,color:(!editForm[f.key]||editForm[f.key]==="0")?"#ef4444":"var(--dim2)",display:"block",marginBottom:"0.2rem"}}>
+                    {(!editForm[f.key]||editForm[f.key]==="0") ? "⚠️ " : "✅ "}{f.label}
+                  </label>
+                  <input value={editForm[f.key]||""} onChange={e=>setEditForm(p=>({...p,[f.key]:e.target.value}))}
+                    style={{...inp, borderColor:(!editForm[f.key]||editForm[f.key]==="0")?"rgba(239,68,68,0.4)":"var(--rim)"}} />
+                </div>
+              ))}
+            </div>
+            <div style={{marginBottom:"0.75rem"}}>
+              <label style={{fontSize:"0.62rem",fontWeight:700,color:"var(--dim2)",display:"block",marginBottom:"0.2rem"}}>メモ</label>
+              <textarea value={editForm.memo||""} onChange={e=>setEditForm(p=>({...p,memo:e.target.value}))}
+                style={{...inp,minHeight:60,resize:"vertical"}} />
+            </div>
+            <div style={{display:"flex",gap:"0.5rem",justifyContent:"flex-end"}}>
+              <button onClick={()=>setEditLog(null)} style={{padding:"0.5rem 1rem",borderRadius:8,border:"1px solid var(--rim)",background:"transparent",color:"var(--dim2)",fontSize:"0.82rem",cursor:"pointer"}}>キャンセル</button>
+              <button onClick={savePopup} style={{padding:"0.5rem 1.5rem",borderRadius:8,border:"none",background:"var(--orange)",color:"#fff",fontSize:"0.82rem",fontWeight:700,cursor:"pointer"}}>💾 保存する</button>
             </div>
           </div>
-          {log.memo && <div style={{marginTop:"0.5rem",fontSize:"0.78rem",color:"var(--dim2)",borderTop:"1px solid var(--rim)",paddingTop:"0.5rem"}}>{log.memo}</div>}
         </div>
-      ))}
+      )}
     </div>
   )
 }
