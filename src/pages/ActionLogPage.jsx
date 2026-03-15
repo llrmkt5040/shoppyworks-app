@@ -848,9 +848,10 @@ function ImportTab({ uid, onImported }) {
     const idxMap = {
       sales: getIdx("Sales (PHP)"), rebate: getIdx("Rebate"),
       orders: getIdx("Orders"), clicks: getIdx("Product Clicks"),
-      visitors: getIdx("Visitors"), cvr: getIdx("Order Conversion"),
+      visitors: getIdx("Visitors"), ocr: getIdx("Order Conversion"),
       cancel: getIdx("Cancelled Orders"), cancelSales: getIdx("Cancelled Sales"),
-      returned: getIdx("Returned"), newBuyers: getIdx("new buyers")
+      returned: getIdx("Returned"), newBuyers: getIdx("new buyers"),
+      spo: getIdx("Sales per Order")
     }
     const dayMap = {}
     dataRows.forEach(r => {
@@ -859,7 +860,7 @@ function ImportTab({ uid, onImported }) {
       const parts = dateStr.split("/")
       if (parts.length !== 3) return
       const isoDate = parts[2] + "-" + parts[1].padStart(2,"0") + "-" + parts[0].padStart(2,"0")
-      if (!dayMap[isoDate]) dayMap[isoDate] = { sales_php:0, sales_rebate_php:0, orders:0, clicks:0, visitors:0, cancelled:0, cancelled_sales:0, returned:0, new_buyers:0, cvr_sum:0, cvr_count:0 }
+      if (!dayMap[isoDate]) dayMap[isoDate] = { sales_php:0, sales_rebate_php:0, orders:0, clicks:0, visitors:0, cancelled:0, cancelled_sales:0, returned:0, new_buyers:0, ocr_sum:0, ocr_count:0, spo_sum:0, spo_count:0 }
       const d = dayMap[isoDate]
       const n = (key) => Number(String(r[idxMap[key]]||"0").replace(/,/g,"")) || 0
       d.sales_php += n("sales"); d.sales_rebate_php += n("rebate")
@@ -867,10 +868,15 @@ function ImportTab({ uid, onImported }) {
       d.visitors += n("visitors"); d.cancelled += n("cancel")
       d.cancelled_sales += n("cancelSales"); d.returned += n("returned")
       d.new_buyers += n("newBuyers")
-      const cvrVal = parseFloat(String(r[idxMap.cvr]||"0").replace("%","")) || 0
-      if (cvrVal > 0) { d.cvr_sum += cvrVal; d.cvr_count++ }
+      const ocrVal = parseFloat(String(r[idxMap.ocr]||"0").replace("%","")) || 0
+      if (ocrVal > 0) { d.ocr_sum += ocrVal; d.ocr_count++ }
+      const spoVal = parseFloat(String(r[idxMap.spo]||"0").replace(/,/g,"")) || 0
+      if (spoVal > 0) { d.spo_sum += spoVal; d.spo_count++ }
     })
-    Object.values(dayMap).forEach(d => { d.cvr = d.cvr_count > 0 ? (d.cvr_sum / d.cvr_count).toFixed(2) : "0" })
+    Object.values(dayMap).forEach(d => {
+      d.ocr = d.ocr_count > 0 ? (d.ocr_sum / d.ocr_count).toFixed(2) : "0"
+      d.spo = d.spo_count > 0 ? (d.spo_sum / d.spo_count).toFixed(0) : "0"
+    })
     return dayMap
   }
 
@@ -887,14 +893,22 @@ function ImportTab({ uid, onImported }) {
     const dataRows = rows.slice(headerIdx + 1).filter(r => r[0])
     const costIdx = headers.findIndex(h => String(h||"").includes("Cost (Confirmed"))
     const claimsIdx = headers.findIndex(h => String(h||"") === "Claims")
+    const ordersIdx = headers.findIndex(h => String(h||"").includes("Orders (Confirmed"))
+    const usageIdx = headers.findIndex(h => String(h||"").includes("Usage Rate (Confirmed"))
     const dayMap = {}
     dataRows.forEach(r => {
       const parts = String(r[0]||"").split("/")
       if (parts.length !== 3) return
       const isoDate = parts[2] + "-" + parts[1].padStart(2,"0") + "-" + parts[0].padStart(2,"0")
+      const claimsVal = Number(String(r[claimsIdx]||"0").replace(/,/g,"")) || 0
+      const ordersVal = Number(String(r[ordersIdx]||"0").replace(/,/g,"")) || 0
+      const usageStr = String(r[usageIdx]||"0").replace("%","")
       dayMap[isoDate] = {
         voucher_cost: Number(String(r[costIdx]||"0").replace(/,/g,"")) || 0,
-        voucher_claims: Number(String(r[claimsIdx]||"0").replace(/,/g,"")) || 0,
+        voucher_claims: claimsVal,
+        voucher_orders: ordersVal,
+        voucher_usage_rate: usageStr,
+        voucher_cvr: claimsVal > 0 ? (ordersVal / claimsVal * 100).toFixed(1) : "0",
       }
     })
     const ws2 = wb.Sheets["Performance List"]
@@ -956,8 +970,12 @@ function ImportTab({ uid, onImported }) {
         setIfEmpty("cancelled", row.cancelled > 0 ? row.cancelled : null)
         setIfEmpty("cancelled_sales", row.cancelled_sales > 0 ? row.cancelled_sales : null)
         setIfEmpty("returned", row.returned > 0 ? row.returned : null)
-        setIfEmpty("cv", row.cvr)
+        setIfEmpty("ocr", row.ocr)
+        setIfEmpty("spo", row.spo)
         setIfEmpty("voucher_follow_prize", row.voucher_cost > 0 ? row.voucher_cost : null)
+        setIfEmpty("voucher_claims", row.voucher_claims > 0 ? row.voucher_claims : null)
+        setIfEmpty("voucher_orders", row.voucher_orders > 0 ? row.voucher_orders : null)
+        setIfEmpty("voucher_cvr", row.voucher_cvr)
         setIfEmpty("rate_php_jpy", row.rate_php_jpy)
         await setDoc(doc(db, "action_logs", docId), merged, { merge: true })
         count++
@@ -1148,17 +1166,17 @@ const REQUIRED_FIELDS = [
   { key:"sales_deposit_usd",  label:"入金(USD)",          group:"売上" },
   { key:"visitors",           label:"Visitors",           group:"トラフィック" },
   { key:"clicks",             label:"Clicks",             group:"トラフィック" },
-  { key:"cv",                 label:"CVR(%)",             group:"トラフィック" },
-  { key:"spo",                label:"SPO",                group:"トラフィック" },
   { key:"ocr",                label:"OCR(%)",             group:"トラフィック" },
+  { key:"spo",                label:"SPO(₱)",             group:"トラフィック" },
   { key:"followers",          label:"フォロワー数",        group:"集客" },
   { key:"follow_prize",       label:"フォロープライズ",    group:"集客" },
   { key:"usage",              label:"バウチャー利用数",    group:"集客" },
   { key:"rating_stars",       label:"評価★",              group:"集客" },
   { key:"rating",             label:"評価数",             group:"集客" },
-  { key:"voucher_new_buyer",  label:"新規バウチャー費",    group:"バウチャー" },
-  { key:"voucher_repeat_buyer",label:"リピートバウチャー費",group:"バウチャー" },
-  { key:"voucher_follow_prize",label:"フォロープライズ費", group:"バウチャー" },
+  { key:"voucher_follow_prize",label:"バウチャーコスト(₱)", group:"バウチャー" },
+  { key:"voucher_claims",     label:"配布枚数",            group:"バウチャー" },
+  { key:"voucher_orders",     label:"利用枚数",            group:"バウチャー" },
+  { key:"voucher_cvr",        label:"バウチャーCVR(%)",    group:"バウチャー" },
   { key:"usage_new_buyer",    label:"新規利用率",          group:"バウチャー" },
   { key:"usage_repeat_buyer", label:"リピート利用率",      group:"バウチャー" },
   { key:"pasabuy",            label:"Pasabuy売上",        group:"その他売上" },
@@ -1214,10 +1232,10 @@ function HistoryTab({ logs, onDelete, onEdit, onSave }) {
             <div style={{display:"flex",alignItems:"center",gap:"1rem",flexWrap:"wrap"}}>
               <div style={{fontFamily:"Bebas Neue,sans-serif",fontSize:"1.4rem",color:"var(--orange)",minWidth:90}}>{log.date}</div>
               <div style={{display:"flex",gap:"0.75rem",flexWrap:"wrap",fontSize:"0.82rem",flex:1}}>
-                <span style={{color:log.sales_php?"var(--text)":"#ef4444"}}>₱{Number(log.sales_php||0).toLocaleString()}</span>
+                <span style={{color:log.sales_php?"var(--text)":"#ef4444"}}>₱{Number(log.sales_php||0).toLocaleString()}{log.sales_php&&log.rate_php_jpy?<span style={{color:"#a78bfa",fontSize:"0.75rem"}}> / ¥{Math.round(Number(log.sales_php)*Number(log.rate_php_jpy)).toLocaleString()}</span>:""}</span>
                 <span style={{color:log.orders?"var(--text)":"var(--dim2)"}}>📦{log.orders||"-"}</span>
                 <span style={{color:log.visitors?"var(--text)":"var(--dim2)"}}>👁{Number(log.visitors||0).toLocaleString()}</span>
-                <span style={{color:log.cv?"var(--text)":"var(--dim2)"}}>CVR {log.cv||"-"}%</span>
+                <span style={{color:log.ocr?"var(--text)":"var(--dim2)"}}>OCR {log.ocr||"-"}%</span>
                 <span style={{color:log.listings?"var(--text)":"var(--dim2)"}}>🏪{log.listings||"-"}点</span>
               </div>
               <div style={{display:"flex",gap:"0.5rem",alignItems:"center"}}>
