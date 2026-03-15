@@ -1094,14 +1094,43 @@ function ImportTab({ uid, onImported }) {
 
 // 未入力チェック対象フィールド
 const REQUIRED_FIELDS = [
-  { key:"listings",       label:"出品数",         group:"基本" },
-  { key:"sales_php",      label:"売上(₱)",         group:"売上" },
-  { key:"orders",         label:"注文数",           group:"売上" },
-  { key:"visitors",       label:"Visitors",        group:"トラフィック" },
-  { key:"clicks",         label:"Clicks",          group:"トラフィック" },
-  { key:"cv",             label:"CVR(%)",           group:"トラフィック" },
-  { key:"followers",      label:"フォロワー数",      group:"基本" },
-  { key:"rate_php_jpy",   label:"為替レート",        group:"基本" },
+  { key:"date",               label:"日付",               group:"基本" },
+  { key:"rate_php_jpy",       label:"為替レート(₱→¥)",    group:"基本" },
+  { key:"listings",           label:"出品数",             group:"基本" },
+  { key:"improved_pages",     label:"改善ページ数",        group:"基本" },
+  { key:"sales_php",          label:"売上(₱)",            group:"売上" },
+  { key:"sales_rebate_php",   label:"リベート売上(₱)",     group:"売上" },
+  { key:"orders",             label:"注文数",             group:"売上" },
+  { key:"cancelled",          label:"キャンセル数",        group:"売上" },
+  { key:"cancelled_sales",    label:"キャンセル売上",      group:"売上" },
+  { key:"returned",           label:"返品数",             group:"売上" },
+  { key:"sales_deposit_usd",  label:"入金(USD)",          group:"売上" },
+  { key:"visitors",           label:"Visitors",           group:"トラフィック" },
+  { key:"clicks",             label:"Clicks",             group:"トラフィック" },
+  { key:"cv",                 label:"CVR(%)",             group:"トラフィック" },
+  { key:"spo",                label:"SPO",                group:"トラフィック" },
+  { key:"ocr",                label:"OCR(%)",             group:"トラフィック" },
+  { key:"followers",          label:"フォロワー数",        group:"集客" },
+  { key:"follow_prize",       label:"フォロープライズ",    group:"集客" },
+  { key:"usage",              label:"バウチャー利用数",    group:"集客" },
+  { key:"rating_stars",       label:"評価★",              group:"集客" },
+  { key:"rating",             label:"評価数",             group:"集客" },
+  { key:"voucher_new_buyer",  label:"新規バウチャー費",    group:"バウチャー" },
+  { key:"voucher_repeat_buyer",label:"リピートバウチャー費",group:"バウチャー" },
+  { key:"voucher_follow_prize",label:"フォロープライズ費", group:"バウチャー" },
+  { key:"usage_new_buyer",    label:"新規利用率",          group:"バウチャー" },
+  { key:"usage_repeat_buyer", label:"リピート利用率",      group:"バウチャー" },
+  { key:"pasabuy",            label:"Pasabuy売上",        group:"その他売上" },
+  { key:"pasabuy_cv",         label:"Pasabuy CV",         group:"その他売上" },
+  { key:"inquiry",            label:"問い合わせ数",        group:"その他売上" },
+  { key:"live",               label:"ライブ売上",          group:"その他売上" },
+  { key:"buy_daiso",          label:"仕入(Daiso)",         group:"仕入" },
+  { key:"buy_amazon",         label:"仕入(Amazon)",        group:"仕入" },
+  { key:"buy_mercari",        label:"仕入(Mercari)",       group:"仕入" },
+  { key:"buy_other",          label:"仕入(その他)",        group:"仕入" },
+  { key:"domestic_shipping",  label:"国内送料",            group:"仕入" },
+  { key:"packaging_materials",label:"梱包資材",            group:"仕入" },
+  { key:"memo",               label:"メモ",               group:"メモ" },
 ]
 
 function getMissingFields(log) {
@@ -1183,17 +1212,27 @@ function HistoryTab({ logs, onDelete, onEdit, onSave }) {
               </div>
               <button onClick={()=>setEditLog(null)} style={{background:"transparent",border:"none",color:"var(--dim2)",fontSize:"1.2rem",cursor:"pointer"}}>✕</button>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"1.25rem"}}>
-              {REQUIRED_FIELDS.map(f => (
-                <div key={f.key}>
-                  <label style={{fontSize:"0.62rem",fontWeight:700,color:(!editForm[f.key]||editForm[f.key]==="0")?"#ef4444":"var(--dim2)",display:"block",marginBottom:"0.2rem"}}>
-                    {(!editForm[f.key]||editForm[f.key]==="0") ? "⚠️ " : "✅ "}{f.label}
-                  </label>
-                  <input value={editForm[f.key]||""} onChange={e=>setEditForm(p=>({...p,[f.key]:e.target.value}))}
-                    style={{...inp, borderColor:(!editForm[f.key]||editForm[f.key]==="0")?"rgba(239,68,68,0.4)":"var(--rim)"}} />
+            {/* グループ別に表示 */}
+            {["基本","売上","トラフィック","集客","バウチャー","その他売上","仕入","メモ"].map(group => {
+              const fields = REQUIRED_FIELDS.filter(f => f.group === group && f.key !== "date" && f.key !== "memo")
+              if (fields.length === 0) return null
+              return (
+                <div key={group} style={{marginBottom:"1rem"}}>
+                  <div style={{fontSize:"0.65rem",fontWeight:700,color:"var(--dim2)",marginBottom:"0.5rem",textTransform:"uppercase",borderBottom:"1px solid var(--rim)",paddingBottom:"0.3rem"}}>{group}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem"}}>
+                    {fields.map(f => (
+                      <div key={f.key}>
+                        <label style={{fontSize:"0.62rem",fontWeight:700,color:(!editForm[f.key]||editForm[f.key]==="0")?"#f59e0b":"var(--dim2)",display:"block",marginBottom:"0.2rem"}}>
+                          {(!editForm[f.key]||editForm[f.key]==="0") ? "○ " : "✅ "}{f.label}
+                        </label>
+                        <input value={editForm[f.key]||""} onChange={e=>setEditForm(p=>({...p,[f.key]:e.target.value}))}
+                          style={{...inp}} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              )
+            })}
             <div style={{marginBottom:"0.75rem"}}>
               <label style={{fontSize:"0.62rem",fontWeight:700,color:"var(--dim2)",display:"block",marginBottom:"0.2rem"}}>メモ</label>
               <textarea value={editForm.memo||""} onChange={e=>setEditForm(p=>({...p,memo:e.target.value}))}
