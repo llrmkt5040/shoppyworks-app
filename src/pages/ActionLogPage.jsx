@@ -969,8 +969,8 @@ function ImportTab({ uid, onImported }) {
           })}
         </div>
         {error && <div style={{ color:"#ef4444", fontSize:"0.78rem", marginTop:"0.75rem" }}>⚠️ {error}</div>}
-        <button onClick={handleFiles} disabled={!files.business && !files.voucher}
-          style={{ marginTop:"1rem", padding:"0.55rem 1.5rem", borderRadius:8, border:"none", background:"var(--orange)", color:"#fff", fontSize:"0.82rem", fontWeight:700, cursor:"pointer", opacity:(!files.business&&!files.voucher)?0.5:1 }}>
+        <button onClick={handleFiles}
+          style={{ marginTop:"1rem", padding:"0.55rem 1.5rem", borderRadius:8, border:"none", background:"var(--orange)", color:"#fff", fontSize:"0.82rem", fontWeight:700, cursor:"pointer" }}>
           🔍 データを解析する
         </button>
       </div>
