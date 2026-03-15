@@ -792,10 +792,17 @@ function ImportTab({ uid, onImported }) {
     const ws = wb.Sheets["Placed Order"]
     if (!ws) throw new Error("Placed Orderシートが見つかりません")
     const rows = XLSX.utils.sheet_to_json(ws, { header:1 })
-    const timeHeaderIdx = rows.findIndex(r => r[0] === "Time")
+    // "Time"または"Date"のヘッダー行を探す（時間別データ優先）
+    let timeHeaderIdx = rows.findIndex(r => String(r[0]||"").trim() === "Time")
+    if (timeHeaderIdx < 0) timeHeaderIdx = rows.findIndex(r => String(r[0]||"").trim() === "Date")
     if (timeHeaderIdx < 0) throw new Error("時系列データが見つかりません")
     const headers = rows[timeHeaderIdx]
-    const dataRows = rows.slice(timeHeaderIdx + 1).filter(r => r[0] && String(r[0]).includes("/"))
+    // 時間別データ行（"DD/MM/YYYY HH:MM"形式）またはDate行（"DD/MM/YYYY-DD/MM/YYYY"形式）
+    const dataRows = rows.slice(timeHeaderIdx + 1).filter(r => {
+      if (!r[0]) return false
+      const s = String(r[0]).trim()
+      return s.includes("/") && s.length > 5
+    })
     const getIdx = (...names) => { for (const n of names) { const i = headers.findIndex(h => String(h||"").includes(n)); if (i>=0) return i } return -1 }
     const idxMap = {
       sales: getIdx("Sales (PHP)"), rebate: getIdx("Rebate"),
