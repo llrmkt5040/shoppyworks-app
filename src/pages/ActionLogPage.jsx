@@ -98,7 +98,7 @@ function GraphTab({ chartData }) {
 }
 
 export default function ActionLogPage({ uid: propUid }) {
-  const [tab, setTab] = useState("input")
+  const [tab, setTab] = useState("import")
   const [logs, setLogs] = useState([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -282,7 +282,7 @@ export default function ActionLogPage({ uid: propUid }) {
       </div>
 
       {tab === "import" && (
-        <ImportTab uid={propUid || auth.currentUser?.uid} onImported={() => { fetchLogs(); setTab("history") }} />
+        <ImportTab uid={propUid || auth.currentUser?.uid} onImported={() => { fetchLogs() }} />
       )}
       {tab === "input" && (
         <div>
@@ -780,6 +780,8 @@ function ImportTab({ uid, onImported }) {
   const [files, setFiles] = useState({ business: null, voucher: null })
   const [preview, setPreview] = useState([])
   const [importing, setImporting] = useState(false)
+  const [imported, setImported] = useState(false)
+  const [importCount, setImportCount] = useState(0)
   const [error, setError] = useState("")
   const [aiAdvice, setAiAdvice] = useState("")
   const [aiLoading, setAiLoading] = useState(false)
@@ -912,7 +914,8 @@ function ImportTab({ uid, onImported }) {
         await setDoc(doc(db, "action_logs", docId), merged, { merge: true })
         count++
       }
-      alert("✅ " + count + "日分のデータをShopeeDiaryに反映しました！")
+      setImported(true)
+      setImportCount(count)
       onImported()
     } catch(e) { alert("インポートエラー: " + e.message) }
     setImporting(false)
@@ -991,6 +994,11 @@ function ImportTab({ uid, onImported }) {
               {importing ? "反映中..." : "✅ ShopeeDiaryに反映する"}
             </button>
           </div>
+          {imported && (
+            <div style={{ padding:"0.5rem 1rem", background:"rgba(34,197,94,0.1)", borderRadius:8, border:"1px solid rgba(34,197,94,0.3)", fontSize:"0.78rem", color:"#22c55e", fontWeight:700 }}>
+              ✅ {importCount}日分のデータをShopeeDiaryに反映済み
+            </div>
+          )}
           <div style={{ overflowX:"auto", maxHeight:300, overflowY:"auto" }}>
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"0.75rem" }}>
               <thead style={{ position:"sticky", top:0, background:"var(--surface)" }}>
