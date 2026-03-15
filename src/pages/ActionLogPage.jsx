@@ -1200,9 +1200,9 @@ function HistoryTab({ logs, onDelete, onEdit, onSave }) {
 
       {/* 未入力ポップアップ */}
       {editLog && (
-        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.75)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}
           onClick={e=>{if(e.target===e.currentTarget)setEditLog(null)}}>
-          <div style={{background:"var(--bg)",borderRadius:16,padding:"1.5rem",width:"100%",maxWidth:560,maxHeight:"85vh",overflowY:"auto",border:"1px solid var(--rim)"}}>
+          <div style={{background:"var(--bg)",borderRadius:16,padding:"1.5rem",width:"100%",maxWidth:580,maxHeight:"90vh",overflowY:"auto",border:"1px solid var(--rim)",boxShadow:"0 20px 60px rgba(0,0,0,0.5)"}} onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
               <div>
                 <div style={{fontWeight:800,fontSize:"1rem",color:"var(--orange)"}}>{editLog.date}</div>
